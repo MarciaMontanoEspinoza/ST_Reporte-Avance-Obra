@@ -66,9 +66,11 @@
   .unit-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
   .unit-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
   .unit-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); opacity:.85; }
+  .unit-card.pre-entrega{ background:#F7EAD9; border-color:var(--accent); }
   .unit-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--pending); }
   .unit-card.entregado .unit-dot{ background:var(--ok); }
   .unit-card.no-instalable .unit-dot{ background:var(--danger); }
+  .unit-card.pre-entrega .unit-dot{ background:var(--accent); }
   .unit-card.otro-contratista .unit-dot{ background:var(--ink-soft); }
   .chip-row{ display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px; }
   .chip{ border:1px solid var(--border); background:#fff; color:var(--ink); padding:9px 14px; border-radius:20px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -160,6 +162,7 @@
   .report-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
   .report-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
   .report-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); }
+  .report-card.pre-entrega{ background:#F7EAD9; border-color:var(--accent); }
   .report-code{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:6px; }
   .report-dates{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; }
   .report-row{ font-size:13px; margin-bottom:8px; line-height:1.45; }
@@ -383,7 +386,8 @@ function defaultRoom(def){
 function newUnit(){
   const now = Date.now();
   return {
-    id: uid(), unidad:"", modelo:"", torre:"", nivel:"", contratista:"Cucina Capitale", entregado:false,
+    id: uid(), unidad:"", modelo:"", torre:"", nivel:"", contratista:"Cucina Capitale",
+    preEntrega:false, fechaPreEntrega:"", entregado:false,
     puedeInstalar:null, comentarioNoInstalar:"",
     rooms: ROOM_DEFS.map(defaultRoom),
     observaciones:"", videoLink:"", actaEntregaLink:"", fechaEntrega:"",
@@ -461,6 +465,7 @@ function pendingCount(u){
 function estadoLabel(u){
   if(!esUnidadPropia(u)) return "Contratista: " + (u.contratista || "otro");
   if(u.entregado) return "Entregado";
+  if(u.preEntrega) return "Pre-entrega";
   if(u.puedeInstalar==="no") return "No se puede instalar";
   if(u.puedeInstalar==="si") return "En proceso";
   return "Sin iniciar";
@@ -513,6 +518,7 @@ function hayFiltrosActivos(){ return !!(activeFilters.torre || activeFilters.niv
 function unitStateClass(u){
   if(!esUnidadPropia(u)) return "otro-contratista";
   if(u.entregado) return "entregado";
+  if(u.preEntrega) return "pre-entrega";
   if(u.puedeInstalar==="no") return "no-instalable";
   return "";
 }
@@ -521,6 +527,11 @@ function unitStateSummary(u){
   if(u.entregado){
     let s = "<b>ENTREGADO</b>";
     if(u.fechaEntrega && u.fechaEntrega.trim()) s += ` <i>${escapeHtml(u.fechaEntrega.trim())}</i>`;
+    return s;
+  }
+  if(u.preEntrega){
+    let s = "<b>PRE-ENTREGA</b>";
+    if(u.fechaPreEntrega && u.fechaPreEntrega.trim()) s += ` <i>${escapeHtml(u.fechaPreEntrega.trim())}</i>`;
     return s;
   }
   if(u.puedeInstalar==="no") return "No se puede instalar";
@@ -640,6 +651,7 @@ function renderReport(){
       <div class="report-code">${escapeHtml(unitLabel(u))}</div>
       ${ubicacionTexto(u) ? `<div class="report-dates">${escapeHtml(ubicacionTexto(u))}</div>` : ""}
       <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
+      ${u.fechaPreEntrega ? `<div class="report-row"><b>Fecha de pre-entrega:</b> ${escapeHtml(u.fechaPreEntrega)}</div>` : ""}
       ${u.fechaEntrega ? `<div class="report-row"><b>Fecha de entrega:</b> ${escapeHtml(u.fechaEntrega)}</div>` : ""}
       <div class="report-row"><b>Cocina:</b> ${escapeHtml(r.cocina)}</div>
       <div class="report-row"><b>Baños:</b> ${escapeHtml(r.banos)}</div>
@@ -652,11 +664,11 @@ function renderReport(){
   html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad / Modelo\tTorre\tNivel\tContratista\tEstado\tFecha de captura\tÚltima actualización\tFecha de entrega\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
+  const tsvRows = ["Unidad / Modelo\tTorre\tNivel\tContratista\tEstado\tFecha de captura\tÚltima actualización\tFecha de pre-entrega\tFecha de entrega\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
   const textRows = [];
   sorted.forEach(u=>{
     const r = reportFor(u);
-    tsvRows.push([unitLabel(u), u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
+    tsvRows.push([unitLabel(u), u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
     textRows.push(`${unitLabel(u)} — ${u.contratista||""} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
   });
   document.getElementById("copyBox").value = textRows.join("\n");
@@ -699,10 +711,10 @@ function csvEscape(s){
   return s;
 }
 function exportCsv(){
-  const rows = [["Unidad","Modelo","Torre","Nivel","Contratista","Estado","Fecha de captura","Última actualización","Fecha de entrega","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
+  const rows = [["Unidad","Modelo","Torre","Nivel","Contratista","Estado","Fecha de captura","Última actualización","Fecha de pre-entrega","Fecha de entrega","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
   sortedUnits().forEach(u=>{
     const r = reportFor(u);
-    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
   });
   const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
@@ -794,6 +806,17 @@ function renderEditor(){
   }
 
   if(esNuestra){
+    html += `<div class="entregado-toggle">
+      <div class="lbl">PRE-ENTREGA</div>
+      <label class="switch"><input type="checkbox" id="preEntregaToggle" ${draft.preEntrega ? "checked":""}/><span class="slider"></span></label>
+    </div>`;
+    if(draft.preEntrega){
+      html += `<div class="section">
+        <label class="field-label">Fecha de pre-entrega</label>
+        <input type="text" class="full" id="fechaPreEntregaInput" placeholder="dd/mm/aa" value="${escapeHtml(draft.fechaPreEntrega||'')}"/>
+      </div>`;
+    }
+
     html += `<div class="entregado-toggle">
       <div class="lbl">Departamento ENTREGADO</div>
       <label class="switch"><input type="checkbox" id="entregadoToggle" ${draft.entregado ? "checked":""}/><span class="slider"></span></label>
@@ -928,6 +951,9 @@ function bindEditorEvents(overlay){
   });
   const contratistaInput = overlay.querySelector("#contratistaInput");
   if(contratistaInput) contratistaInput.addEventListener("input", (e)=>{ draft.contratista = e.target.value; });
+  overlay.querySelector("#preEntregaToggle").addEventListener("change", (e)=>{ draft.preEntrega = e.target.checked; renderEditor(); });
+  const fechaPreEntregaInput = overlay.querySelector("#fechaPreEntregaInput");
+  if(fechaPreEntregaInput) fechaPreEntregaInput.addEventListener("input", (e)=>{ draft.fechaPreEntrega = e.target.value; });
   overlay.querySelector("#entregadoToggle").addEventListener("change", (e)=>{ draft.entregado = e.target.checked; renderEditor(); });
 
   overlay.querySelectorAll('[data-seg="puedeInstalar"]').forEach(btn=>{
