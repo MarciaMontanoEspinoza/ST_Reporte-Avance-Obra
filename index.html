@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<title>Recorrido Satori — Checklist</title>
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#382F2D" />
+<link rel="apple-touch-icon" href="icon-180.png" />
+<link rel="icon" href="favicon-32.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Satori" />
+<meta name="mobile-web-app-capable" content="yes" />
+<style>
+  :root{
+    --bg:#F5F2ED;
+    --surface:#FFFFFF;
+    --ink:#222222;
+    --ink-soft:#7A6E64;
+    --primary:#382F2D;
+    --primary-soft:#EFEAE8;
+    --accent:#B68150;
+    --accent-deep:#96694C;
+    --tan:#DAB38D;
+    --stone:#D6D1C4;
+    --ok:#166534;
+    --ok-soft:#E4F3E8;
+    --pending:#96694C;
+    --pending-soft:#F3E7DC;
+    --danger:#B42318;
+    --danger-soft:#FBE7E5;
+    --border:#E3DCD2;
+    --radius:16px;
+    --mono: "SF Mono", ui-monospace, "Courier New", monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{ background:var(--bg); color:var(--ink); font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color:transparent; padding-bottom:110px; }
+  .app-header{ position:sticky; top:0; z-index:20; background:var(--primary); color:#fff; padding:18px 20px 16px; }
+  .app-header-top{ display:flex; align-items:center; justify-content:space-between; }
+  .app-header h1{ margin:0; font-size:19px; font-weight:700; letter-spacing:.2px; }
+  .app-header .sub{ font-size:12.5px; color:#D9CFC7; margin-top:3px; }
+  .status-badge{ font-size:11px; font-weight:700; padding:5px 10px; border-radius:20px; background:rgba(255,255,255,.14); color:#fff; white-space:nowrap; }
+  .tabs{ display:flex; gap:6px; margin-top:16px; background:rgba(255,255,255,.12); padding:4px; border-radius:12px; }
+  .tab-btn{ flex:1; border:none; background:transparent; color:#E7DFD9; padding:11px 8px; border-radius:9px; font-size:14px; font-weight:600; font-family:inherit; cursor:pointer; }
+  .tab-btn.active{ background:#fff; color:var(--primary); }
+  .note-local{ font-size:11.5px; color:#D9CFC7; margin-top:9px; }
+
+  .content{ padding:18px; max-width:720px; margin:0 auto; }
+
+  .toolbar{ display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .tool-btn{ flex:1; min-width:100px; background:var(--surface); border:1px solid var(--border); color:var(--primary); padding:11px 8px; border-radius:12px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; text-align:center; }
+  .tool-btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+
+  .stats{ display:flex; gap:12px; margin-bottom:20px; }
+  .stat{ flex:1; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 12px; text-align:center; }
+  .stat .num{ font-size:21px; font-weight:800; color:var(--primary); }
+  .stat .lbl{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
+  .stat.ok .num{ color:var(--ok); }
+  .stat.pending .num{ color:var(--pending); }
+
+  .unit-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; display:flex; align-items:center; gap:14px; cursor:pointer; }
+  .unit-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
+  .unit-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
+  .unit-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--pending); }
+  .unit-card.entregado .unit-dot{ background:var(--ok); }
+  .unit-card.no-instalable .unit-dot{ background:var(--danger); }
+  .unit-main{ flex:1; min-width:0; }
+  .unit-code{ font-family:var(--mono); font-size:16px; font-weight:700; display:inline-block; border:1px solid var(--border); border-radius:6px; padding:2px 8px; background:var(--bg); }
+  .unit-summary{ font-size:12.5px; color:var(--ink-soft); margin-top:7px; }
+  .unit-dates{ font-size:11px; color:var(--ink-soft); margin-top:4px; }
+  .chevron{ color:var(--ink-soft); font-size:20px; }
+
+  .empty-state{ text-align:center; padding:56px 20px; color:var(--ink-soft); }
+  .empty-state .big{ font-size:38px; margin-bottom:8px; }
+
+  .fab{ position:fixed; right:20px; bottom:24px; z-index:30; width:60px; height:60px; border-radius:50%; background:var(--accent); color:#fff; border:none; font-size:30px; line-height:60px; text-align:center; box-shadow:0 6px 16px rgba(182,129,80,.45); cursor:pointer; }
+
+  .editor-overlay{ position:fixed; inset:0; background:var(--bg); z-index:40; overflow-y:auto; padding-bottom:120px; }
+  .editor-header{ position:sticky; top:0; background:var(--primary); color:#fff; padding:16px 18px; display:flex; align-items:center; gap:12px; z-index:5; }
+  .editor-header button{ background:rgba(255,255,255,.15); border:none; color:#fff; padding:10px 16px; border-radius:9px; font-size:14px; font-weight:600; font-family:inherit; }
+  .editor-title{ flex:1; font-size:16px; font-weight:700; }
+  .editor-dates{ font-size:11.5px; color:var(--ink-soft); padding:10px 18px 0; }
+
+  .section{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin:18px 18px 22px; }
+  .section h3{ margin:0 0 14px; font-size:14px; text-transform:uppercase; letter-spacing:.4px; color:var(--primary); }
+  .field-row{ display:flex; gap:10px; margin-bottom:12px; }
+  .field-row input[type=text]{ flex:1; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:15px; font-family:inherit; background:#fff; }
+  input[type=text].full, input[type=url].full{ width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:14.5px; font-family:inherit; background:#fff; }
+  label.field-label{ font-size:12px; font-weight:700; color:var(--ink-soft); display:block; margin-bottom:6px; }
+
+  .entregado-toggle{ display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin:18px 18px 0; }
+  .entregado-toggle .lbl{ font-weight:700; font-size:15px; }
+  .switch{ position:relative; width:52px; height:30px; flex-shrink:0; }
+  .switch input{ opacity:0; width:0; height:0; }
+  .slider{ position:absolute; inset:0; background:#DCD3C8; border-radius:30px; cursor:pointer; transition:.2s; }
+  .slider:before{ content:""; position:absolute; width:24px; height:24px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  input:checked + .slider{ background:var(--ok); }
+  input:checked + .slider:before{ transform:translateX(22px); }
+
+  .mini-switch{ position:relative; width:42px; height:24px; flex-shrink:0; display:inline-block; }
+  .mini-switch input{ opacity:0; width:0; height:0; }
+  .mini-slider{ position:absolute; inset:0; background:#DCD3C8; border-radius:24px; cursor:pointer; transition:.2s; }
+  .mini-slider:before{ content:""; position:absolute; width:18px; height:18px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+  .mini-switch input:checked + .mini-slider{ background:var(--ok); }
+  .mini-switch input:checked + .mini-slider:before{ transform:translateX(18px); }
+
+  .big-question{ margin:18px 18px 0; background:var(--surface); border:2px solid var(--primary); border-radius:var(--radius); padding:18px; }
+  .big-question .q{ font-size:16px; font-weight:800; color:var(--primary); margin-bottom:12px; }
+  .big-question .seg-buttons{ height:52px; }
+  .big-question .seg-btn{ font-size:15px; }
+
+  .comentario-box{ margin:18px 18px 0; }
+
+  .seg-buttons{ display:flex; border:1.5px solid var(--border); border-radius:11px; overflow:hidden; }
+  .seg-btn{ flex:1; border:none; background:#fff; padding:11px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; color:var(--ink-soft); }
+  .seg-btn:first-child{ border-right:1px solid var(--border); }
+  .seg-btn.seg-yes{ background:var(--ok-soft); color:var(--ok); }
+  .seg-btn.seg-no{ background:var(--pending-soft); color:var(--pending); }
+  .seg-btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .mueble-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .mueble-row:last-child{ border-bottom:none; }
+  .mueble-row-left .code{ font-family:var(--mono); font-weight:700; font-size:14.5px; }
+  .mueble-row-right{ display:flex; align-items:center; gap:10px; }
+  .mueble-row-right .seg-buttons{ width:110px; height:38px; }
+  .mueble-row-right .seg-btn{ font-size:12.5px; padding:6px; }
+
+  .item-row{ margin-bottom:14px; }
+  .item-row:last-child{ margin-bottom:0; }
+  .item-label{ font-size:13.5px; font-weight:600; color:var(--ink); margin-bottom:7px; }
+  .detail-input{ width:100%; border:1px solid var(--pending); background:var(--pending-soft); border-radius:10px; padding:10px 12px; font-size:14px; font-family:inherit; margin-top:8px; }
+
+  .room-block{ border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:16px; background:#FBFAF8; }
+  .room-block:last-child{ margin-bottom:0; }
+  .room-head{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:14px; color:var(--accent-deep); }
+
+  textarea{ width:100%; border:1px solid var(--border); border-radius:10px; padding:11px 13px; font-size:14.5px; font-family:inherit; resize:vertical; min-height:56px; background:#fff; margin-top:10px; }
+
+  .add-hint{ font-size:12px; color:var(--ink-soft); margin:2px 0 12px; }
+
+  .save-bar{ position:fixed; bottom:0; left:0; right:0; padding:16px 18px; background:linear-gradient(to top, var(--bg) 65%, transparent); z-index:10; }
+  .save-btn{ width:100%; background:var(--accent); color:#fff; border:none; border-radius:14px; padding:17px; font-size:16px; font-weight:700; font-family:inherit; cursor:pointer; box-shadow:0 6px 16px rgba(182,129,80,.4); }
+
+  .report-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
+  .report-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
+  .report-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
+  .report-code{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:6px; }
+  .report-dates{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; }
+  .report-row{ font-size:13px; margin-bottom:8px; line-height:1.45; }
+  .report-row b{ color:var(--primary); }
+  .report-row a{ color:var(--accent-deep); }
+
+  .action-btn{ width:100%; background:var(--primary); color:#fff; border:none; border-radius:12px; padding:14px; font-size:14.5px; font-weight:700; font-family:inherit; cursor:pointer; margin-bottom:12px; }
+  .action-btn.secondary{ background:var(--surface); color:var(--primary); border:1.5px solid var(--primary); }
+
+  .copy-box{ width:100%; min-height:150px; font-family:var(--mono); font-size:12px; border:1px solid var(--border); border-radius:10px; padding:12px; background:#fff; margin-top:12px; }
+  .toast{ position:fixed; bottom:100px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:11px 20px; border-radius:30px; font-size:13.5px; z-index:60; opacity:0; transition:opacity .25s; pointer-events:none; text-align:center; max-width:85vw; }
+  .toast.show{ opacity:1; }
+  .link-danger{ display:block; text-align:center; color:var(--danger); font-size:12.5px; margin-top:28px; background:none; border:none; font-family:inherit; width:100%; padding:10px; }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <div class="app-header-top">
+    <div>
+      <h1>Recorrido Satori</h1>
+      <div class="sub">Checklist de instalación · cocina, baños y closets</div>
+    </div>
+    <div class="status-badge" id="statusBadge">📱 Local</div>
+  </div>
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="list">Unidades</button>
+    <button class="tab-btn" data-tab="report">Reporte</button>
+  </div>
+  <div class="note-local">Los datos se guardan solo en este dispositivo. Funciona sin internet después de la primera vez que la abras.</div>
+</div>
+
+<div class="content" id="content"></div>
+<button class="fab" id="fabAdd">+</button>
+<div class="toast" id="toast"></div>
+<input type="file" id="importFile" accept="application/json" style="display:none" />
+
+<script>
+// ---------------- Almacenamiento local (sin internet, sin Claude) ----------------
+const STORAGE_KEY = "satori_units_local_v1";
+
+function setStatus(text){ document.getElementById("statusBadge").textContent = text; }
+
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }catch(e){ return []; }
+}
+function saveLocal(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(units));
+    setStatus("📱 Guardado");
+    setTimeout(()=> setStatus("📱 Local"), 1500);
+  }catch(e){
+    toast("No se pudo guardar (memoria llena)");
+  }
+}
+
+// ---------------- Definiciones ----------------
+const ROOM_DEFS = [
+  { id:"cocina", label:"Cocina", type:"cocina" },
+  { id:"bavi",   label:"BAVI",   type:"bano" },
+  { id:"ba01",   label:"BA01",   type:"bano" },
+  { id:"ba02",   label:"BA02",   type:"bano" },
+  { id:"ba03",   label:"BA03",   type:"bano" },
+  { id:"rec01",  label:"REC01",  type:"closet" },
+  { id:"rec02",  label:"REC02",  type:"closet" },
+  { id:"rec03",  label:"REC03",  type:"closet" },
+  { id:"recser", label:"RECSER", type:"closet" },
+  { id:"clbco",  label:"CLBCO",  type:"closet" },
+  { id:"cling",  label:"CLING",  type:"closet" },
+  { id:"esttv",  label:"ESTTV",  type:"closet" },
+];
+
+const COCINA_ITEMS = [
+  { key:"mobiliario", label:"Instalación de mobiliario completa", falta:"Falta instalación de mobiliario" },
+  { key:"piezasGenericas", label:"Instalación de piezas genéricas completa", falta:"Falta instalación de piezas genéricas" },
+  { key:"led", label:"Instalación de luz LED completa", falta:"Falta instalación de luz LED" },
+  { key:"tipon", label:"Instalación de tip-on completa", falta:"Falta instalación de tip-on" },
+  { key:"zoclo", label:"Instalación de zoclo completa", falta:"Falta instalación de zoclo" },
+  { key:"tapete", label:"Instalación de tapete antihumedad completa", falta:"Falta instalación de tapete antihumedad" },
+  { key:"cierreLento", label:"Funcionamiento de cierre lento en cajones", falta:"Cierre lento en cajones no funciona correctamente" },
+  { key:"limpiezaGruesa", label:"Limpieza gruesa", falta:"Falta limpieza gruesa" },
+  { key:"detallado", label:"Detallado", falta:"Falta detallado" },
+  { key:"nivelacion", label:"Nivelación y alineación de frentes y vistas", falta:"Falta nivelación y alineación de frentes y vistas" },
+  { key:"limpiezaFina", label:"Limpieza fina", falta:"Falta limpieza fina" },
+];
+const BANO_ITEMS = [
+  { key:"mobiliario", label:"Instalación de mobiliario completa", falta:"Falta instalación de mobiliario" },
+  { key:"piezasGenericas", label:"Instalación de piezas genéricas completa", falta:"Falta instalación de piezas genéricas" },
+  { key:"espejos", label:"Instalación de espejos completa", falta:"Faltan espejos" },
+  { key:"correderas", label:"Funcionamiento de correderas en cajones", falta:"Correderas en cajones no funcionan correctamente" },
+  { key:"limpiezaGruesa", label:"Limpieza gruesa", falta:"Falta limpieza gruesa" },
+  { key:"detallado", label:"Detallado", falta:"Falta detallado" },
+  { key:"nivelacion", label:"Nivelación y alineación de frentes y vistas", falta:"Falta nivelación y alineación de frentes y vistas" },
+  { key:"limpiezaFina", label:"Limpieza fina", falta:"Falta limpieza fina" },
+];
+const CLOSET_ITEMS = [
+  { key:"mobiliario", label:"Instalación de mobiliario completa", falta:"Falta instalación de mobiliario" },
+  { key:"piezasGenericas", label:"Instalación de piezas genéricas completa", falta:"Falta instalación de piezas genéricas" },
+  { key:"zoclo", label:"Instalación de zoclo completa", falta:"Falta instalación de zoclo" },
+  { key:"jaladeras", label:"Instalación de jaladeras completa", falta:"Falta instalación de jaladeras" },
+  { key:"correderas", label:"Funcionamiento de correderas en cajones", falta:"Correderas en cajones no funcionan correctamente" },
+  { key:"limpiezaGruesa", label:"Limpieza gruesa", falta:"Falta limpieza gruesa" },
+  { key:"detallado", label:"Detallado", falta:"Falta detallado" },
+  { key:"nivelacion", label:"Nivelación y alineación de frentes y vistas", falta:"Falta nivelación y alineación de frentes y vistas" },
+  { key:"limpiezaFina", label:"Limpieza fina", falta:"Falta limpieza fina" },
+];
+function itemsFor(type){
+  if(type==="cocina") return COCINA_ITEMS;
+  if(type==="bano") return BANO_ITEMS;
+  return CLOSET_ITEMS;
+}
+
+let units = [];
+let draft = null;
+let currentTab = "list";
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+function defaultRoom(def){
+  const items = {};
+  itemsFor(def.type).forEach(i=>{ items[i.key] = { value:null, detalle:"" }; });
+  return { id:def.id, label:def.label, type:def.type, aplica:true, muebleEnObra:null, items, notas:"" };
+}
+function newUnit(){
+  const now = Date.now();
+  return {
+    id: uid(), unidad:"", modelo:"", entregado:false,
+    puedeInstalar:null, comentarioNoInstalar:"",
+    rooms: ROOM_DEFS.map(defaultRoom),
+    observaciones:"", videoLink:"",
+    createdAt: now, updatedAt: now
+  };
+}
+
+// ---------------- Generación de texto ----------------
+function roomText(room){
+  let parts = [];
+  if(room.muebleEnObra==="no") parts.push("Muebles aún no llegan a obra.");
+  itemsFor(room.type).forEach(i=>{
+    const st = room.items[i.key];
+    if(st.value==="no"){
+      let t = i.falta;
+      if(st.detalle && st.detalle.trim()) t += " (" + st.detalle.trim() + ")";
+      parts.push(t + ".");
+    }
+  });
+  if(room.notas && room.notas.trim()) parts.push(room.notas.trim());
+  if(parts.length===0) return "Completo.";
+  return parts.join(" ");
+}
+function unitLabel(u){ return u.unidad + (u.modelo ? " (" + u.modelo + ")" : ""); }
+
+function reportFor(u){
+  if(u.entregado) return { cocina:"ENTREGADO", banos:"ENTREGADO", closets:"ENTREGADO", obs:"Departamento entregado." };
+  if(u.puedeInstalar === "no"){
+    const msg = "No se puede instalar. " + (u.comentarioNoInstalar.trim() || "Sin comentario registrado.");
+    return { cocina:msg, banos:msg, closets:msg, obs: u.comentarioNoInstalar.trim() || "—" };
+  }
+  const cocinaRoom = u.rooms.find(r=>r.type==="cocina");
+  const cocina = (cocinaRoom && cocinaRoom.aplica) ? roomText(cocinaRoom) : "—";
+  const banoRooms = u.rooms.filter(r=>r.type==="bano" && r.aplica);
+  const banos = banoRooms.length ? banoRooms.map(r=> r.label + ": " + roomText(r)).join(" ") : "—";
+  const closetRooms = u.rooms.filter(r=>r.type==="closet" && r.aplica);
+  const closets = closetRooms.length ? closetRooms.map(r=> r.label + ": " + roomText(r)).join(" ") : "—";
+  return { cocina, banos, closets, obs: u.observaciones.trim() || "—" };
+}
+
+function pendingCount(u){
+  if(u.entregado) return 0;
+  if(u.puedeInstalar === "no") return 1;
+  if(u.puedeInstalar !== "si") return 0;
+  let n = 0;
+  u.rooms.filter(r=>r.aplica).forEach(r=>{
+    if(r.muebleEnObra==="no") n++;
+    itemsFor(r.type).forEach(i=>{ if(r.items[i.key].value==="no") n++; });
+  });
+  return n;
+}
+function estadoLabel(u){
+  if(u.entregado) return "Entregado";
+  if(u.puedeInstalar==="no") return "No se puede instalar";
+  if(u.puedeInstalar==="si") return "En proceso";
+  return "Sin iniciar";
+}
+
+// ---------------- Fechas ----------------
+function formatDate(ts){ return ts ? new Date(ts).toLocaleDateString("es-MX") : "—"; }
+function formatDateTime(ts){ return ts ? new Date(ts).toLocaleString("es-MX", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"}) : "—"; }
+
+// ---------------- Render: shell ----------------
+const content = document.getElementById("content");
+const toastEl = document.getElementById("toast");
+function toast(msg){ toastEl.textContent = msg; toastEl.classList.add("show"); setTimeout(()=> toastEl.classList.remove("show"), 2000); }
+function escapeHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+function render(){ if(currentTab === "list") renderList(); else renderReport(); }
+function sortedUnits(){ return [...units].sort((a,b)=> a.unidad.localeCompare(b.unidad)); }
+
+function unitStateClass(u){
+  if(u.entregado) return "entregado";
+  if(u.puedeInstalar==="no") return "no-instalable";
+  return "";
+}
+function unitStateSummary(u){
+  if(u.entregado) return "Entregado";
+  if(u.puedeInstalar==="no") return "No se puede instalar";
+  if(u.puedeInstalar==="si"){
+    const pc = pendingCount(u);
+    return pc===0 ? "Todo listo, sin pendientes" : pc + " pendiente(s) detectado(s)";
+  }
+  return "Falta responder: ¿se puede instalar?";
+}
+
+function renderList(){
+  const totalEntregados = units.filter(u=>u.entregado).length;
+  const totalNoInstalable = units.filter(u=>!u.entregado && u.puedeInstalar==="no").length;
+  const totalPend = units.length - totalEntregados - totalNoInstalable;
+  let html = `<div class="toolbar">
+    <button class="tool-btn primary" id="btnNew">+ Nueva unidad</button>
+    <button class="tool-btn" id="btnExportBackup">Exportar respaldo</button>
+    <button class="tool-btn" id="btnImportBackup">Importar respaldo</button>
+    <button class="tool-btn" id="btnExportCsv">Exportar Excel (CSV)</button>
+  </div>`;
+
+  html += `<div class="stats">
+    <div class="stat"><div class="num">${units.length}</div><div class="lbl">Unidades</div></div>
+    <div class="stat ok"><div class="num">${totalEntregados}</div><div class="lbl">Entregadas</div></div>
+    <div class="stat pending"><div class="num">${totalPend}</div><div class="lbl">En proceso</div></div>
+  </div>`;
+
+  if(units.length === 0){
+    html += `<div class="empty-state"><div class="big">🏗️</div>Aún no hay unidades capturadas.<br>Toca "+ Nueva unidad" o el botón + para agregar la primera.</div>`;
+  } else {
+    sortedUnits().forEach(u=>{
+      html += `<div class="unit-card ${unitStateClass(u)}" data-id="${u.id}">
+        <div class="unit-dot"></div>
+        <div class="unit-main">
+          <div class="unit-code">${escapeHtml(unitLabel(u)) || "Sin unidad"}</div>
+          <div class="unit-summary">${unitStateSummary(u)}</div>
+          <div class="unit-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDate(u.updatedAt)}</div>
+        </div>
+        <div class="chevron">›</div>
+      </div>`;
+    });
+    html += `<button class="link-danger" id="clearAll">Borrar todos los datos de este dispositivo</button>`;
+  }
+  content.innerHTML = html;
+
+  content.querySelectorAll(".unit-card").forEach(card=>{
+    card.addEventListener("click", ()=>{ openEditor(units.find(x=>x.id === card.dataset.id)); });
+  });
+  document.getElementById("btnNew").addEventListener("click", openNewEditor);
+  document.getElementById("btnExportBackup").addEventListener("click", exportBackup);
+  document.getElementById("btnExportCsv").addEventListener("click", exportCsv);
+  document.getElementById("btnImportBackup").addEventListener("click", ()=> document.getElementById("importFile").click());
+
+  const clearBtn = document.getElementById("clearAll");
+  if(clearBtn) clearBtn.addEventListener("click", ()=>{
+    if(confirm("¿Borrar todas las unidades capturadas EN ESTE DISPOSITIVO? Esta acción no se puede deshacer. Si no has exportado un respaldo, se perderá la información.")){
+      units = [];
+      saveLocal();
+      render();
+    }
+  });
+}
+
+function renderReport(){
+  if(units.length === 0){
+    content.innerHTML = `<div class="empty-state"><div class="big">📋</div>Captura al menos una unidad para ver el reporte.</div>`;
+    return;
+  }
+  const sorted = sortedUnits();
+  let html = `<button class="action-btn" id="copyTsv">Copiar tabla (para Excel / Word)</button>
+              <button class="action-btn secondary" id="copyText">Copiar como texto</button>`;
+
+  sorted.forEach(u=>{
+    const r = reportFor(u);
+    html += `<div class="report-card ${unitStateClass(u)}">
+      <div class="report-code">${escapeHtml(unitLabel(u))}</div>
+      <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
+      <div class="report-row"><b>Cocina:</b> ${escapeHtml(r.cocina)}</div>
+      <div class="report-row"><b>Baños:</b> ${escapeHtml(r.banos)}</div>
+      <div class="report-row"><b>Closets:</b> ${escapeHtml(r.closets)}</div>
+      <div class="report-row"><b>Observaciones:</b> ${escapeHtml(r.obs)}</div>
+      ${u.videoLink ? `<div class="report-row"><b>Video:</b> <a href="${escapeHtml(u.videoLink)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
+    </div>`;
+  });
+  html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
+  content.innerHTML = html;
+
+  const tsvRows = ["Unidad / Modelo\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo"];
+  const textRows = [];
+  sorted.forEach(u=>{
+    const r = reportFor(u);
+    tsvRows.push([unitLabel(u), estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||""].join("\t"));
+    textRows.push(`${unitLabel(u)} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}\n`);
+  });
+  document.getElementById("copyBox").value = textRows.join("\n");
+  document.getElementById("copyTsv").addEventListener("click", ()=> copyToClipboard(tsvRows.join("\n"), "Tabla copiada"));
+  document.getElementById("copyText").addEventListener("click", ()=> copyToClipboard(textRows.join("\n"), "Texto copiado"));
+}
+
+function copyToClipboard(text, msg){
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(()=> toast(msg)).catch(()=>{ fallbackCopy(text); toast(msg); });
+  } else { fallbackCopy(text); toast(msg); }
+}
+function fallbackCopy(text){
+  const ta = document.createElement("textarea");
+  ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); }catch(e){}
+  document.body.removeChild(ta);
+}
+
+// ---------------- Exportar / Importar ----------------
+function downloadBlob(text, filename, mime){
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=> URL.revokeObjectURL(url), 3000);
+}
+function stamp(){ return new Date().toISOString().slice(0,16).replace(/[:T]/g,"-"); }
+
+function exportBackup(){
+  const data = JSON.stringify({ exportedAt: Date.now(), units }, null, 2);
+  downloadBlob(data, `satori_respaldo_${stamp()}.json`, "application/json");
+  toast("Respaldo exportado — mándalo por WhatsApp o súbelo a OneDrive");
+}
+function csvEscape(s){
+  s = (s===null || s===undefined) ? "" : String(s);
+  if(/[",\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
+  return s;
+}
+function exportCsv(){
+  const rows = [["Unidad","Modelo","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video"]];
+  sortedUnits().forEach(u=>{
+    const r = reportFor(u);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||""]);
+  });
+  const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
+  downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
+  toast("Excel (CSV) exportado");
+}
+document.getElementById("importFile").addEventListener("change", (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const parsed = JSON.parse(ev.target.result);
+      const incoming = Array.isArray(parsed) ? parsed : (parsed.units || []);
+      let added=0, updated=0;
+      incoming.forEach(iu=>{
+        const idx = units.findIndex(u=>u.id === iu.id);
+        if(idx === -1){ units.push(iu); added++; }
+        else if((iu.updatedAt||0) > (units[idx].updatedAt||0)){ units[idx] = iu; updated++; }
+      });
+      saveLocal();
+      render();
+      toast(`Importado: ${added} nueva(s), ${updated} actualizada(s)`);
+    }catch(err){ toast("Archivo inválido o dañado"); }
+    e.target.value = "";
+  };
+  reader.readAsText(file);
+});
+
+// ---------------- Editor ----------------
+function openEditor(unit){ draft = JSON.parse(JSON.stringify(unit)); renderEditor(); }
+function openNewEditor(){ draft = newUnit(); renderEditor(); }
+function closeEditor(){ const ov = document.getElementById("editorOverlay"); if(ov) ov.remove(); }
+
+function segButtons(name, value, yesText, noText, disabled){
+  return `<div class="seg-buttons">
+    <button type="button" class="seg-btn ${value==='si'?'seg-yes':''}" data-seg="${name}" data-val="si" ${disabled?'disabled':''}>${yesText||'Sí'}</button>
+    <button type="button" class="seg-btn ${value==='no'?'seg-no':''}" data-seg="${name}" data-val="no" ${disabled?'disabled':''}>${noText||'No'}</button>
+  </div>`;
+}
+
+function renderEditor(){
+  let overlay = document.getElementById("editorOverlay");
+  if(!overlay){
+    overlay = document.createElement("div");
+    overlay.className = "editor-overlay";
+    overlay.id = "editorOverlay";
+    document.body.appendChild(overlay);
+  }
+
+  let html = `<div class="editor-header">
+      <button id="btnCancel">Cancelar</button>
+      <div class="editor-title">${draft.unidad ? escapeHtml(unitLabel(draft)) : "Nueva unidad"}</div>
+    </div>`;
+  if(draft.updatedAt && draft.updatedAt !== draft.createdAt){
+    html += `<div class="editor-dates">Creado: ${formatDate(draft.createdAt)} · Últ. actualización: ${formatDateTime(draft.updatedAt)}</div>`;
+  }
+
+  html += `<div class="section">
+    <h3>Identificación</h3>
+    <div class="field-row">
+      <div style="flex:1"><label class="field-label">Unidad</label><input type="text" id="unidadInput" placeholder="Ej. D-1307" value="${escapeHtml(draft.unidad)}"/></div>
+      <div style="flex:1"><label class="field-label">Modelo</label><input type="text" id="modeloInput" placeholder="Ej. B-5T" value="${escapeHtml(draft.modelo)}"/></div>
+    </div>
+  </div>`;
+
+  html += `<div class="entregado-toggle">
+    <div class="lbl">Departamento ENTREGADO</div>
+    <label class="switch"><input type="checkbox" id="entregadoToggle" ${draft.entregado ? "checked":""}/><span class="slider"></span></label>
+  </div>`;
+
+  if(!draft.entregado){
+    html += `<div class="big-question">
+      <div class="q">¿Se puede instalar el departamento?</div>
+      ${segButtons("puedeInstalar", draft.puedeInstalar, "SÍ", "NO")}
+    </div>`;
+
+    if(draft.puedeInstalar === "no"){
+      html += `<div class="comentario-box section">
+        <h3>¿Por qué no se puede instalar?</h3>
+        <textarea id="comentarioInput" placeholder="Describe el motivo...">${escapeHtml(draft.comentarioNoInstalar)}</textarea>
+      </div>`;
+    }
+
+    if(draft.puedeInstalar === "si"){
+      html += `<div class="section">
+        <h3>Existencia de muebles en obra</h3>
+        <div class="add-hint">Marca "No aplica" si ese modelo no tiene esa área. Luego indica si ya hay muebles.</div>
+        ${draft.rooms.map(roomMueblesRowHtml).join("")}
+      </div>`;
+
+      const cocinaRoom = draft.rooms.find(r=>r.type==="cocina");
+      html += `<div class="section"><h3>Cocina</h3>${cocinaRoom.aplica ? detailedRoomHtml(cocinaRoom, false) : `<div class="add-hint">No aplica.</div>`}</div>`;
+
+      const banoRooms = draft.rooms.filter(r=>r.type==="bano" && r.aplica);
+      html += `<div class="section"><h3>Baños</h3>${banoRooms.length ? banoRooms.map(r=>detailedRoomHtml(r,true)).join("") : `<div class="add-hint">Ningún baño marcado como aplicable.</div>`}</div>`;
+
+      const closetRooms = draft.rooms.filter(r=>r.type==="closet" && r.aplica);
+      html += `<div class="section"><h3>Closets</h3>${closetRooms.length ? closetRooms.map(r=>detailedRoomHtml(r,true)).join("") : `<div class="add-hint">Ningún closet marcado como aplicable.</div>`}</div>`;
+
+      html += `<div class="section"><h3>Observaciones generales</h3>
+        <textarea id="observacionesInput" placeholder="Cualquier detalle adicional del departamento...">${escapeHtml(draft.observaciones)}</textarea>
+      </div>`;
+
+      html += `<div class="section"><h3>Video del recorrido</h3>
+        <div class="add-hint">Graba y sube el video a OneDrive, luego pega aquí el link para compartir.</div>
+        <input type="url" class="full" id="videoLinkInput" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
+      </div>`;
+    }
+  }
+
+  html += `<div class="save-bar"><button class="save-btn" id="btnSave">Guardar unidad</button></div>`;
+  overlay.innerHTML = html;
+  bindEditorEvents(overlay);
+  overlay.scrollTop = 0;
+}
+
+function roomMueblesRowHtml(room){
+  return `<div class="mueble-row" data-mueble-room="${room.id}">
+    <div class="mueble-row-left"><span class="code">${escapeHtml(room.label)}</span></div>
+    <div class="mueble-row-right">
+      <label class="mini-switch"><input type="checkbox" data-room-aplica ${room.aplica?'checked':''}/><span class="mini-slider"></span></label>
+      ${segButtons("muebleEnObra_"+room.id, room.muebleEnObra, "Sí", "No", !room.aplica)}
+    </div>
+  </div>`;
+}
+
+function detailedRoomHtml(room, showHead){
+  const items = itemsFor(room.type);
+  let html = showHead ? `<div class="room-block" data-room="${room.id}"><div class="room-head">${escapeHtml(room.label)}</div>` : `<div data-room="${room.id}">`;
+  items.forEach(i=>{
+    const st = room.items[i.key];
+    html += `<div class="item-row">
+      <div class="item-label">${escapeHtml(i.label)}</div>
+      ${segButtons("item_"+room.id+"_"+i.key, st.value, "Sí", "No")}
+      ${st.value==="no" ? `<input type="text" class="detail-input" data-room-item-detail="${i.key}" placeholder="¿Qué falta / estatus?" value="${escapeHtml(st.detalle||'')}"/>` : ""}
+    </div>`;
+  });
+  html += `<textarea data-room-notes placeholder="Nota adicional (opcional)">${escapeHtml(room.notas)}</textarea>`;
+  html += `</div>`;
+  return html;
+}
+
+function bindEditorEvents(overlay){
+  overlay.querySelector("#btnCancel").addEventListener("click", closeEditor);
+  overlay.querySelector("#unidadInput").addEventListener("input", (e)=>{ draft.unidad = e.target.value; });
+  overlay.querySelector("#modeloInput").addEventListener("input", (e)=>{ draft.modelo = e.target.value; });
+  overlay.querySelector("#entregadoToggle").addEventListener("change", (e)=>{ draft.entregado = e.target.checked; renderEditor(); });
+
+  overlay.querySelectorAll('[data-seg="puedeInstalar"]').forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      draft.puedeInstalar = draft.puedeInstalar === btn.dataset.val ? null : btn.dataset.val;
+      renderEditor();
+    });
+  });
+
+  const comentarioInput = overlay.querySelector("#comentarioInput");
+  if(comentarioInput) comentarioInput.addEventListener("input", (e)=>{ draft.comentarioNoInstalar = e.target.value; });
+  const observacionesInput = overlay.querySelector("#observacionesInput");
+  if(observacionesInput) observacionesInput.addEventListener("input", (e)=>{ draft.observaciones = e.target.value; });
+  const videoInput = overlay.querySelector("#videoLinkInput");
+  if(videoInput) videoInput.addEventListener("input", (e)=>{ draft.videoLink = e.target.value; });
+
+  overlay.querySelectorAll("[data-mueble-room]").forEach(row=>{
+    const room = draft.rooms.find(r=>r.id === row.dataset.muebleRoom);
+    const aplicaChk = row.querySelector("[data-room-aplica]");
+    if(aplicaChk) aplicaChk.addEventListener("change", (e)=>{ room.aplica = e.target.checked; renderEditor(); });
+    row.querySelectorAll('[data-seg^="muebleEnObra_"]').forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        if(!room.aplica) return;
+        room.muebleEnObra = room.muebleEnObra === btn.dataset.val ? null : btn.dataset.val;
+        renderEditor();
+      });
+    });
+  });
+
+  overlay.querySelectorAll("[data-room]").forEach(block=>{
+    const room = draft.rooms.find(r=>r.id === block.dataset.room);
+    if(!room) return;
+    itemsFor(room.type).forEach(i=>{
+      block.querySelectorAll(`[data-seg="item_${room.id}_${i.key}"]`).forEach(btn=>{
+        btn.addEventListener("click", ()=>{
+          const st = room.items[i.key];
+          st.value = st.value === btn.dataset.val ? null : btn.dataset.val;
+          renderEditor();
+        });
+      });
+    });
+    block.querySelectorAll("[data-room-item-detail]").forEach(inp=>{
+      inp.addEventListener("input", (e)=>{ room.items[e.target.dataset.roomItemDetail].detalle = e.target.value; });
+    });
+    const notesTa = block.querySelector("[data-room-notes]");
+    if(notesTa) notesTa.addEventListener("input", (e)=>{ room.notas = e.target.value; });
+  });
+
+  overlay.querySelector("#btnSave").addEventListener("click", ()=>{
+    if(!draft.unidad.trim()){ toast("Escribe al menos el número de unidad"); return; }
+    draft.updatedAt = Date.now();
+    const idx = units.findIndex(u=>u.id === draft.id);
+    if(idx >= 0) units[idx] = draft; else units.push(draft);
+    saveLocal();
+    closeEditor();
+    render();
+    toast("Unidad guardada en este dispositivo");
+  });
+}
+
+// ---------------- Tabs & init ----------------
+document.querySelectorAll(".tab-btn").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab-btn").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    currentTab = btn.dataset.tab;
+    render();
+  });
+});
+document.getElementById("fabAdd").addEventListener("click", openNewEditor);
+
+units = loadLocal();
+render();
+
+if("serviceWorker" in navigator){
+  window.addEventListener("load", ()=>{
+    navigator.serviceWorker.register("sw.js").catch(()=>{ /* si falla, la app sigue funcionando en línea */ });
+  });
+}
+</script>
+</body>
+</html>
