@@ -63,9 +63,14 @@
   .unit-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; display:flex; align-items:center; gap:14px; cursor:pointer; }
   .unit-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
   .unit-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
+  .unit-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); opacity:.85; }
   .unit-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--pending); }
   .unit-card.entregado .unit-dot{ background:var(--ok); }
   .unit-card.no-instalable .unit-dot{ background:var(--danger); }
+  .unit-card.otro-contratista .unit-dot{ background:var(--ink-soft); }
+  .chip-row{ display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px; }
+  .chip{ border:1px solid var(--border); background:#fff; color:var(--ink); padding:9px 14px; border-radius:20px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .chip.selected{ background:var(--primary); border-color:var(--primary); color:#fff; }
   .unit-main{ flex:1; min-width:0; }
   .unit-code{ font-family:var(--mono); font-size:16px; font-weight:700; display:inline-block; border:1px solid var(--border); border-radius:6px; padding:2px 8px; background:var(--bg); }
   .unit-summary{ font-size:12.5px; color:var(--ink-soft); margin-top:7px; }
@@ -152,6 +157,7 @@
   .report-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; }
   .report-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
   .report-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
+  .report-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); }
   .report-code{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:6px; }
   .report-dates{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; }
   .report-row{ font-size:13px; margin-bottom:8px; line-height:1.45; }
@@ -198,7 +204,9 @@ function setStatus(text){ document.getElementById("statusBadge").textContent = t
 function loadLocal(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const parsed = raw ? JSON.parse(raw) : [];
+    parsed.forEach(u=>{ if(!u.contratista) u.contratista = "Cucina Capitale"; });
+    return parsed;
   }catch(e){ return []; }
 }
 function saveLocal(){
@@ -247,7 +255,7 @@ async function pushToSheet(unit){
   const payload = {
     unit,
     display: {
-      unidad: unit.unidad, modelo: unit.modelo, estado: estadoLabel(unit),
+      unidad: unit.unidad, modelo: unit.modelo, contratista: unit.contratista||"", estado: estadoLabel(unit),
       fechaCaptura: formatDate(unit.createdAt), fechaActualizacion: formatDateTime(unit.updatedAt),
       cocina: r.cocina, banos: r.banos, closets: r.closets, observaciones: r.obs,
       video: unit.videoLink || "",
@@ -302,6 +310,8 @@ async function flushPending(){
 }
 
 // ---------------- Definiciones ----------------
+const CONTRATISTA_PRESETS = ["Cucina Capitale", "Codelvex", "FyF"];
+
 const ROOM_DEFS = [
   { id:"cocina", label:"Cocina", type:"cocina" },
   { id:"bavi",   label:"BAVI",   type:"bano" },
@@ -371,7 +381,7 @@ function defaultRoom(def){
 function newUnit(){
   const now = Date.now();
   return {
-    id: uid(), unidad:"", modelo:"", entregado:false,
+    id: uid(), unidad:"", modelo:"", contratista:"Cucina Capitale", entregado:false,
     puedeInstalar:null, comentarioNoInstalar:"",
     rooms: ROOM_DEFS.map(defaultRoom),
     observaciones:"", videoLink:"", actaEntregaLink:"",
@@ -407,7 +417,13 @@ function roomText(room){
 }
 function unitLabel(u){ return u.unidad + (u.modelo ? " (" + u.modelo + ")" : ""); }
 
+function esUnidadPropia(u){ return u.contratista === "Cucina Capitale"; }
+
 function reportFor(u){
+  if(!esUnidadPropia(u)){
+    const msg = `Unidad de ${u.contratista || "otro contratista"} — sin seguimiento de Cucina Capitale.`;
+    return { cocina:msg, banos:msg, closets:msg, obs:"—" };
+  }
   if(u.entregado) return { cocina:"ENTREGADO", banos:"ENTREGADO", closets:"ENTREGADO", obs:"Departamento entregado." };
   if(u.puedeInstalar === "no"){
     const msg = "No se puede instalar. " + (u.comentarioNoInstalar.trim() || "Sin comentario registrado.");
@@ -423,6 +439,7 @@ function reportFor(u){
 }
 
 function pendingCount(u){
+  if(!esUnidadPropia(u)) return 0;
   if(u.entregado) return 0;
   if(u.puedeInstalar === "no") return 1;
   if(u.puedeInstalar !== "si") return 0;
@@ -434,6 +451,7 @@ function pendingCount(u){
   return n;
 }
 function estadoLabel(u){
+  if(!esUnidadPropia(u)) return "Contratista: " + (u.contratista || "otro");
   if(u.entregado) return "Entregado";
   if(u.puedeInstalar==="no") return "No se puede instalar";
   if(u.puedeInstalar==="si") return "En proceso";
@@ -454,11 +472,13 @@ function render(){ if(currentTab === "list") renderList(); else renderReport(); 
 function sortedUnits(){ return [...units].sort((a,b)=> a.unidad.localeCompare(b.unidad)); }
 
 function unitStateClass(u){
+  if(!esUnidadPropia(u)) return "otro-contratista";
   if(u.entregado) return "entregado";
   if(u.puedeInstalar==="no") return "no-instalable";
   return "";
 }
 function unitStateSummary(u){
+  if(!esUnidadPropia(u)) return "Contratista: " + (u.contratista || "otro");
   if(u.entregado) return "Entregado";
   if(u.puedeInstalar==="no") return "No se puede instalar";
   if(u.puedeInstalar==="si"){
@@ -534,6 +554,15 @@ function renderReport(){
 
   sorted.forEach(u=>{
     const r = reportFor(u);
+    if(!esUnidadPropia(u)){
+      html += `<div class="report-card ${unitStateClass(u)}">
+        <div class="report-code">${escapeHtml(unitLabel(u))}</div>
+        <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
+        <div class="report-row"><b>Contratista:</b> ${escapeHtml(u.contratista||"")}</div>
+        <div class="report-row">Sin seguimiento de instalación — unidad no asignada a Cucina Capitale.</div>
+      </div>`;
+      return;
+    }
     html += `<div class="report-card ${unitStateClass(u)}">
       <div class="report-code">${escapeHtml(unitLabel(u))}</div>
       <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
@@ -548,12 +577,12 @@ function renderReport(){
   html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad / Modelo\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
+  const tsvRows = ["Unidad / Modelo\tContratista\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
   const textRows = [];
   sorted.forEach(u=>{
     const r = reportFor(u);
-    tsvRows.push([unitLabel(u), estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
-    textRows.push(`${unitLabel(u)} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
+    tsvRows.push([unitLabel(u), u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
+    textRows.push(`${unitLabel(u)} — ${u.contratista||""} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
   });
   document.getElementById("copyBox").value = textRows.join("\n");
   document.getElementById("copyTsv").addEventListener("click", ()=> copyToClipboard(tsvRows.join("\n"), "Tabla copiada"));
@@ -595,10 +624,10 @@ function csvEscape(s){
   return s;
 }
 function exportCsv(){
-  const rows = [["Unidad","Modelo","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
+  const rows = [["Unidad","Modelo","Contratista","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
   sortedUnits().forEach(u=>{
     const r = reportFor(u);
-    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
   });
   const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
@@ -612,6 +641,7 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
     try{
       const parsed = JSON.parse(ev.target.result);
       const incoming = Array.isArray(parsed) ? parsed : (parsed.units || []);
+      incoming.forEach(iu=>{ if(!iu.contratista) iu.contratista = "Cucina Capitale"; });
       let added=0, updated=0;
       incoming.forEach(iu=>{
         const idx = units.findIndex(u=>u.id === iu.id);
@@ -668,24 +698,39 @@ function renderEditor(){
       <div style="flex:1"><label class="field-label">Unidad</label><input type="text" id="unidadInput" placeholder="Ej. D-1307" value="${escapeHtml(draft.unidad)}"/></div>
       <div style="flex:1"><label class="field-label">Modelo</label><input type="text" id="modeloInput" placeholder="Ej. B-5T" value="${escapeHtml(draft.modelo)}"/></div>
     </div>
+    <label class="field-label">Contratista asignado</label>
+    <div class="chip-row">
+      ${CONTRATISTA_PRESETS.map(c=>`<button type="button" class="chip ${draft.contratista===c?'selected':''}" data-contratista="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("")}
+    </div>
+    <input type="text" id="contratistaInput" placeholder="U otro contratista (texto libre)" value="${draft.contratista && !CONTRATISTA_PRESETS.includes(draft.contratista) ? escapeHtml(draft.contratista) : ""}" />
   </div>`;
 
-  html += `<div class="entregado-toggle">
-    <div class="lbl">Departamento ENTREGADO</div>
-    <label class="switch"><input type="checkbox" id="entregadoToggle" ${draft.entregado ? "checked":""}/><span class="slider"></span></label>
-  </div>`;
+  const esNuestra = draft.contratista === "Cucina Capitale";
 
-  if(draft.entregado){
-    html += `<div class="section"><h3>Comprobante de entrega</h3>
-      <label class="field-label">Video del recorrido (OneDrive)</label>
-      <input type="url" class="full" id="videoLinkInputEntregado" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
-      <div style="height:14px"></div>
-      <label class="field-label">Hoja de entrega firmada (OneDrive)</label>
-      <input type="url" class="full" id="actaEntregaInput" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.actaEntregaLink||'')}"/>
+  if(!esNuestra){
+    html += `<div class="section">
+      <h3>Unidad de otro contratista</h3>
+      <div class="add-hint">Esta unidad está asignada a <b>${escapeHtml(draft.contratista || "otro contratista")}</b>, así que no se despliega el checklist de instalación. Cuando la unidad regrese a Cucina Capitale, cambia el contratista arriba para habilitar el resto del formulario.</div>
     </div>`;
   }
 
-  if(!draft.entregado){
+  if(esNuestra){
+    html += `<div class="entregado-toggle">
+      <div class="lbl">Departamento ENTREGADO</div>
+      <label class="switch"><input type="checkbox" id="entregadoToggle" ${draft.entregado ? "checked":""}/><span class="slider"></span></label>
+    </div>`;
+
+    if(draft.entregado){
+      html += `<div class="section"><h3>Comprobante de entrega</h3>
+        <label class="field-label">Video del recorrido (OneDrive)</label>
+        <input type="url" class="full" id="videoLinkInputEntregado" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
+        <div style="height:14px"></div>
+        <label class="field-label">Hoja de entrega firmada (OneDrive)</label>
+        <input type="url" class="full" id="actaEntregaInput" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.actaEntregaLink||'')}"/>
+      </div>`;
+    }
+
+    if(!draft.entregado){
     html += `<div class="big-question">
       <div class="q">¿Se puede instalar el departamento?</div>
       ${segButtons("puedeInstalar", draft.puedeInstalar, "SÍ", "NO")}
@@ -725,6 +770,7 @@ function renderEditor(){
       </div>`;
     }
   }
+  } // cierre de if(esNuestra)
 
   html += `<div class="save-bar"><button class="save-btn" id="btnSave">Guardar unidad</button></div>`;
   overlay.innerHTML = html;
@@ -789,6 +835,15 @@ function bindEditorEvents(overlay){
   overlay.querySelector("#btnCancel").addEventListener("click", closeEditor);
   overlay.querySelector("#unidadInput").addEventListener("input", (e)=>{ draft.unidad = e.target.value; });
   overlay.querySelector("#modeloInput").addEventListener("input", (e)=>{ draft.modelo = e.target.value; });
+
+  overlay.querySelectorAll("[data-contratista]").forEach(chip=>{
+    chip.addEventListener("click", ()=>{
+      draft.contratista = chip.dataset.contratista;
+      renderEditor();
+    });
+  });
+  const contratistaInput = overlay.querySelector("#contratistaInput");
+  if(contratistaInput) contratistaInput.addEventListener("input", (e)=>{ draft.contratista = e.target.value; });
   overlay.querySelector("#entregadoToggle").addEventListener("change", (e)=>{ draft.entregado = e.target.checked; renderEditor(); });
 
   overlay.querySelectorAll('[data-seg="puedeInstalar"]').forEach(btn=>{
