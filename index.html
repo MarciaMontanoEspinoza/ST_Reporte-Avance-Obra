@@ -50,6 +50,8 @@
   .content{ padding:18px; max-width:720px; margin:0 auto; }
 
   .toolbar{ display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .filters-row{ display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .filter-select{ flex:1; min-width:120px; background:var(--surface); border:1px solid var(--border); color:var(--ink); padding:10px 8px; border-radius:12px; font-size:13px; font-family:inherit; }
   .tool-btn{ flex:1; min-width:100px; background:var(--surface); border:1px solid var(--border); color:var(--primary); padding:11px 8px; border-radius:12px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; text-align:center; }
   .tool-btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
 
@@ -489,6 +491,25 @@ function sortedUnits(){
   });
 }
 
+let activeFilters = { torre:"", nivel:"", modelo:"" };
+
+function opcionesFiltro(campo){
+  const vals = [...new Set(units.map(u=>u[campo]).filter(v=>v && v.trim()))];
+  if(campo === "nivel") vals.sort((a,b)=> nivelSortKey(a)-nivelSortKey(b));
+  else vals.sort((a,b)=> a.localeCompare(b));
+  return vals;
+}
+
+function filteredUnits(){
+  return sortedUnits().filter(u=>{
+    if(activeFilters.torre && u.torre !== activeFilters.torre) return false;
+    if(activeFilters.nivel && u.nivel !== activeFilters.nivel) return false;
+    if(activeFilters.modelo && u.modelo !== activeFilters.modelo) return false;
+    return true;
+  });
+}
+function hayFiltrosActivos(){ return !!(activeFilters.torre || activeFilters.nivel || activeFilters.modelo); }
+
 function unitStateClass(u){
   if(!esUnidadPropia(u)) return "otro-contratista";
   if(u.entregado) return "entregado";
@@ -496,8 +517,12 @@ function unitStateClass(u){
   return "";
 }
 function unitStateSummary(u){
-  if(!esUnidadPropia(u)) return "Contratista: " + (u.contratista || "otro");
-  if(u.entregado) return "Entregado";
+  if(!esUnidadPropia(u)) return "Contratista: " + escapeHtml(u.contratista || "otro");
+  if(u.entregado){
+    let s = "<b>ENTREGADO</b>";
+    if(u.fechaEntrega && u.fechaEntrega.trim()) s += ` <i>${escapeHtml(u.fechaEntrega.trim())}</i>`;
+    return s;
+  }
   if(u.puedeInstalar==="no") return "No se puede instalar";
   if(u.puedeInstalar==="si"){
     const pc = pendingCount(u);
@@ -507,9 +532,10 @@ function unitStateSummary(u){
 }
 
 function renderList(){
-  const totalEntregados = units.filter(u=>u.entregado).length;
-  const totalNoInstalable = units.filter(u=>!u.entregado && u.puedeInstalar==="no").length;
-  const totalPend = units.length - totalEntregados - totalNoInstalable;
+  const base = filteredUnits();
+  const totalEntregados = base.filter(u=>u.entregado).length;
+  const totalNoInstalable = base.filter(u=>!u.entregado && u.puedeInstalar==="no").length;
+  const totalPend = base.length - totalEntregados - totalNoInstalable;
   let html = `<div class="toolbar">
     <button class="tool-btn primary" id="btnNew">+ Nueva unidad</button>
     <button class="tool-btn" id="btnSync">🔗 Respaldo compartido</button>
@@ -518,16 +544,37 @@ function renderList(){
     <button class="tool-btn" id="btnImportBackup">Importar respaldo</button>
   </div>`;
 
+  const torres = opcionesFiltro("torre");
+  const niveles = opcionesFiltro("nivel");
+  const modelos = opcionesFiltro("modelo");
+  html += `<div class="filters-row">
+    <select class="filter-select" id="filterTorre">
+      <option value="">Todas las torres</option>
+      ${torres.map(t=>`<option value="${escapeHtml(t)}" ${activeFilters.torre===t?'selected':''}>Torre ${escapeHtml(t)}</option>`).join("")}
+    </select>
+    <select class="filter-select" id="filterNivel">
+      <option value="">Todos los niveles</option>
+      ${niveles.map(n=>`<option value="${escapeHtml(n)}" ${activeFilters.nivel===n?'selected':''}>Nivel ${escapeHtml(n)}</option>`).join("")}
+    </select>
+    <select class="filter-select" id="filterModelo">
+      <option value="">Todos los prototipos</option>
+      ${modelos.map(m=>`<option value="${escapeHtml(m)}" ${activeFilters.modelo===m?'selected':''}>${escapeHtml(m)}</option>`).join("")}
+    </select>
+    ${hayFiltrosActivos() ? `<button class="tool-btn" id="btnClearFilters">✕ Limpiar filtros</button>` : ""}
+  </div>`;
+
   html += `<div class="stats">
-    <div class="stat"><div class="num">${units.length}</div><div class="lbl">Unidades</div></div>
+    <div class="stat"><div class="num">${base.length}</div><div class="lbl">Unidades</div></div>
     <div class="stat ok"><div class="num">${totalEntregados}</div><div class="lbl">Entregadas</div></div>
     <div class="stat pending"><div class="num">${totalPend}</div><div class="lbl">En proceso</div></div>
   </div>`;
 
   if(units.length === 0){
     html += `<div class="empty-state"><div class="big">🏗️</div>Aún no hay unidades capturadas.<br>Toca "+ Nueva unidad" o el botón + para agregar la primera.</div>`;
+  } else if(base.length === 0){
+    html += `<div class="empty-state"><div class="big">🔎</div>Ningún depto coincide con los filtros seleccionados.</div>`;
   } else {
-    sortedUnits().forEach(u=>{
+    base.forEach(u=>{
       html += `<div class="unit-card ${unitStateClass(u)}" data-id="${u.id}">
         <div class="unit-dot"></div>
         <div class="unit-main">
@@ -551,6 +598,12 @@ function renderList(){
   document.getElementById("btnExportBackup").addEventListener("click", exportBackup);
   document.getElementById("btnExportCsv").addEventListener("click", exportCsv);
   document.getElementById("btnImportBackup").addEventListener("click", ()=> document.getElementById("importFile").click());
+
+  document.getElementById("filterTorre").addEventListener("change", (e)=>{ activeFilters.torre = e.target.value; render(); });
+  document.getElementById("filterNivel").addEventListener("change", (e)=>{ activeFilters.nivel = e.target.value; render(); });
+  document.getElementById("filterModelo").addEventListener("change", (e)=>{ activeFilters.modelo = e.target.value; render(); });
+  const clearFiltersBtn = document.getElementById("btnClearFilters");
+  if(clearFiltersBtn) clearFiltersBtn.addEventListener("click", ()=>{ activeFilters = {torre:"", nivel:"", modelo:""}; render(); });
 
   const clearBtn = document.getElementById("clearAll");
   if(clearBtn) clearBtn.addEventListener("click", ()=>{
@@ -749,7 +802,7 @@ function renderEditor(){
     if(draft.entregado){
       html += `<div class="section"><h3>Comprobante de entrega</h3>
         <label class="field-label">Fecha de entrega</label>
-        <input type="date" class="full" id="fechaEntregaInput" value="${escapeHtml(draft.fechaEntrega||'')}"/>
+        <input type="text" class="full" id="fechaEntregaInput" placeholder="dd/mm/aa" value="${escapeHtml(draft.fechaEntrega||'')}"/>
         <div style="height:14px"></div>
         <label class="field-label">Video del recorrido (OneDrive)</label>
         <input type="url" class="full" id="videoLinkInputEntregado" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
