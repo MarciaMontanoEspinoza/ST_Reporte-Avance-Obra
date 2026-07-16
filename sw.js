@@ -25,21 +25,19 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Cache-first: sirve del cache si existe; si no, va a la red y guarda copia para la próxima vez.
+// Red primero: si hay internet, siempre trae la versión más nueva y actualiza la copia guardada.
+// Si no hay internet, usa la última copia guardada para que la app siga funcionando.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request)
-        .then((response) => {
-          if (response && response.status === 200) {
-            const clone = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-    })
+    fetch(event.request)
+      .then((response) => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(event.request))
   );
 });

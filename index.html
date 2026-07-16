@@ -85,6 +85,12 @@
 
   .section{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin:18px 18px 22px; }
   .section h3{ margin:0 0 14px; font-size:14px; text-transform:uppercase; letter-spacing:.4px; color:var(--primary); }
+  .section h3.collapsible{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; }
+  .section h3.collapsible.is-collapsed{ margin-bottom:0; }
+  .collapse-right{ display:flex; align-items:center; gap:8px; font-weight:400; text-transform:none; letter-spacing:0; }
+  .collapse-summary{ font-size:12px; color:var(--ink-soft); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .chevron-toggle{ color:var(--accent-deep); font-size:14px; }
+  .room-head.collapsible{ cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
   .field-row{ display:flex; gap:10px; margin-bottom:12px; }
   .field-row input[type=text]{ flex:1; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:15px; font-family:inherit; background:#fff; }
   input[type=text].full, input[type=url].full{ width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:14.5px; font-family:inherit; background:#fff; }
@@ -199,10 +205,100 @@ function saveLocal(){
   try{
     localStorage.setItem(STORAGE_KEY, JSON.stringify(units));
     setStatus("📱 Guardado");
-    setTimeout(()=> setStatus("📱 Local"), 1500);
+    setTimeout(()=> setStatus(localStorage.getItem(SYNC_URL_KEY) ? "☁️ Conectado" : "📱 Local"), 1500);
   }catch(e){
     toast("No se pudo guardar (memoria llena)");
   }
+}
+
+// ---------------- Respaldo compartido (Google Sheets vía Apps Script) ----------------
+const SYNC_URL_KEY = "satori_sync_url";
+const PENDING_KEY = "satori_pending_sync_ids";
+
+function getSyncUrl(){ return (localStorage.getItem(SYNC_URL_KEY) || "").trim(); }
+function getPending(){ try{ return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); }catch(e){ return []; } }
+function setPending(arr){ localStorage.setItem(PENDING_KEY, JSON.stringify(arr)); }
+function addPending(id){ const p = getPending(); if(!p.includes(id)){ p.push(id); setPending(p); } }
+function removePending(id){ setPending(getPending().filter(x=>x!==id)); }
+
+function configurarRespaldo(){
+  const current = getSyncUrl();
+  const url = prompt("Pega aquí el link de tu Apps Script (termina en /exec). Déjalo vacío para desconectar:", current);
+  if(url === null) return;
+  const trimmed = url.trim();
+  if(trimmed === ""){
+    localStorage.removeItem(SYNC_URL_KEY);
+    setStatus("📱 Local");
+    toast("Respaldo compartido desconectado");
+    return;
+  }
+  localStorage.setItem(SYNC_URL_KEY, trimmed);
+  toast("Conectando...");
+  syncPullAndMerge().then((ok)=>{
+    toast(ok ? "Conectado y sincronizado ✓" : "Guardado el link, pero no pude conectar ahorita — reintentaré solo");
+    setStatus(ok ? "☁️ Conectado" : "📡 Sin conexión");
+  });
+}
+
+async function pushToSheet(unit){
+  const url = getSyncUrl();
+  if(!url) return { ok:false, reason:"sin-configurar" };
+  const r = reportFor(unit);
+  const payload = {
+    unit,
+    display: {
+      unidad: unit.unidad, modelo: unit.modelo, estado: estadoLabel(unit),
+      fechaCaptura: formatDate(unit.createdAt), fechaActualizacion: formatDateTime(unit.updatedAt),
+      cocina: r.cocina, banos: r.banos, closets: r.closets, observaciones: r.obs,
+      video: unit.videoLink || "",
+      hojaEntrega: unit.actaEntregaLink || ""
+    }
+  };
+  try{
+    const res = await fetch(url, { method:"POST", headers:{ "Content-Type":"text/plain;charset=utf-8" }, body: JSON.stringify(payload) });
+    return await res.json();
+  }catch(e){ return { ok:false, reason:"red" }; }
+}
+
+async function pullFromSheet(){
+  const url = getSyncUrl();
+  if(!url) return null;
+  try{
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data && data.ok) ? data.units : null;
+  }catch(e){ return null; }
+}
+
+function mergeUnits(local, remote){
+  const map = {};
+  local.forEach(u=> map[u.id] = u);
+  remote.forEach(u=>{
+    if(!map[u.id] || (u.updatedAt||0) > (map[u.id].updatedAt||0)) map[u.id] = u;
+  });
+  return Object.values(map);
+}
+
+async function syncPullAndMerge(){
+  if(!getSyncUrl()) return false;
+  const remote = await pullFromSheet();
+  if(remote === null) return false;
+  units = mergeUnits(units, remote);
+  saveLocal();
+  render();
+  return true;
+}
+
+async function flushPending(){
+  if(!getSyncUrl()) return;
+  const pending = getPending();
+  for(const id of pending){
+    const u = units.find(x=>x.id === id);
+    if(!u){ removePending(id); continue; }
+    const res = await pushToSheet(u);
+    if(res && res.ok) removePending(id);
+  }
+  setStatus(getPending().length === 0 ? "☁️ Conectado" : "📡 Sin conexión");
 }
 
 // ---------------- Definiciones ----------------
@@ -278,7 +374,7 @@ function newUnit(){
     id: uid(), unidad:"", modelo:"", entregado:false,
     puedeInstalar:null, comentarioNoInstalar:"",
     rooms: ROOM_DEFS.map(defaultRoom),
-    observaciones:"", videoLink:"",
+    observaciones:"", videoLink:"", actaEntregaLink:"",
     createdAt: now, updatedAt: now
   };
 }
@@ -368,9 +464,10 @@ function renderList(){
   const totalPend = units.length - totalEntregados - totalNoInstalable;
   let html = `<div class="toolbar">
     <button class="tool-btn primary" id="btnNew">+ Nueva unidad</button>
+    <button class="tool-btn" id="btnSync">🔗 Respaldo compartido</button>
+    <button class="tool-btn" id="btnExportCsv">Exportar Excel (CSV)</button>
     <button class="tool-btn" id="btnExportBackup">Exportar respaldo</button>
     <button class="tool-btn" id="btnImportBackup">Importar respaldo</button>
-    <button class="tool-btn" id="btnExportCsv">Exportar Excel (CSV)</button>
   </div>`;
 
   html += `<div class="stats">
@@ -401,6 +498,7 @@ function renderList(){
     card.addEventListener("click", ()=>{ openEditor(units.find(x=>x.id === card.dataset.id)); });
   });
   document.getElementById("btnNew").addEventListener("click", openNewEditor);
+  document.getElementById("btnSync").addEventListener("click", configurarRespaldo);
   document.getElementById("btnExportBackup").addEventListener("click", exportBackup);
   document.getElementById("btnExportCsv").addEventListener("click", exportCsv);
   document.getElementById("btnImportBackup").addEventListener("click", ()=> document.getElementById("importFile").click());
@@ -434,17 +532,18 @@ function renderReport(){
       <div class="report-row"><b>Closets:</b> ${escapeHtml(r.closets)}</div>
       <div class="report-row"><b>Observaciones:</b> ${escapeHtml(r.obs)}</div>
       ${u.videoLink ? `<div class="report-row"><b>Video:</b> <a href="${escapeHtml(u.videoLink)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
+      ${u.actaEntregaLink ? `<div class="report-row"><b>Hoja de entrega:</b> <a href="${escapeHtml(u.actaEntregaLink)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
     </div>`;
   });
   html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad / Modelo\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo"];
+  const tsvRows = ["Unidad / Modelo\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
   const textRows = [];
   sorted.forEach(u=>{
     const r = reportFor(u);
-    tsvRows.push([unitLabel(u), estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||""].join("\t"));
-    textRows.push(`${unitLabel(u)} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}\n`);
+    tsvRows.push([unitLabel(u), estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
+    textRows.push(`${unitLabel(u)} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
   });
   document.getElementById("copyBox").value = textRows.join("\n");
   document.getElementById("copyTsv").addEventListener("click", ()=> copyToClipboard(tsvRows.join("\n"), "Tabla copiada"));
@@ -486,10 +585,10 @@ function csvEscape(s){
   return s;
 }
 function exportCsv(){
-  const rows = [["Unidad","Modelo","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video"]];
+  const rows = [["Unidad","Modelo","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
   sortedUnits().forEach(u=>{
     const r = reportFor(u);
-    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||""]);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
   });
   const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
@@ -519,8 +618,8 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
 });
 
 // ---------------- Editor ----------------
-function openEditor(unit){ draft = JSON.parse(JSON.stringify(unit)); renderEditor(); }
-function openNewEditor(){ draft = newUnit(); renderEditor(); }
+function openEditor(unit){ draft = JSON.parse(JSON.stringify(unit)); collapsedState = {}; renderEditor(); }
+function openNewEditor(){ draft = newUnit(); collapsedState = {}; renderEditor(); }
 function closeEditor(){ const ov = document.getElementById("editorOverlay"); if(ov) ov.remove(); }
 
 function segButtons(name, value, yesText, noText, disabled){
@@ -530,13 +629,19 @@ function segButtons(name, value, yesText, noText, disabled){
   </div>`;
 }
 
+let collapsedState = {};
+
 function renderEditor(){
   let overlay = document.getElementById("editorOverlay");
+  let isNew = false, prevScroll = 0;
   if(!overlay){
     overlay = document.createElement("div");
     overlay.className = "editor-overlay";
     overlay.id = "editorOverlay";
     document.body.appendChild(overlay);
+    isNew = true;
+  } else {
+    prevScroll = overlay.scrollTop;
   }
 
   let html = `<div class="editor-header">
@@ -560,6 +665,16 @@ function renderEditor(){
     <label class="switch"><input type="checkbox" id="entregadoToggle" ${draft.entregado ? "checked":""}/><span class="slider"></span></label>
   </div>`;
 
+  if(draft.entregado){
+    html += `<div class="section"><h3>Comprobante de entrega</h3>
+      <label class="field-label">Video del recorrido (OneDrive)</label>
+      <input type="url" class="full" id="videoLinkInputEntregado" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
+      <div style="height:14px"></div>
+      <label class="field-label">Hoja de entrega firmada (OneDrive)</label>
+      <input type="url" class="full" id="actaEntregaInput" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.actaEntregaLink||'')}"/>
+    </div>`;
+  }
+
   if(!draft.entregado){
     html += `<div class="big-question">
       <div class="q">¿Se puede instalar el departamento?</div>
@@ -574,14 +689,15 @@ function renderEditor(){
     }
 
     if(draft.puedeInstalar === "si"){
-      html += `<div class="section">
-        <h3>Existencia de muebles en obra</h3>
-        <div class="add-hint">Marca "No aplica" si ese modelo no tiene esa área. Luego indica si ya hay muebles.</div>
-        ${draft.rooms.map(roomMueblesRowHtml).join("")}
-      </div>`;
+      const totalAplica = draft.rooms.filter(r=>r.aplica).length;
+      const totalNoAplica = draft.rooms.length - totalAplica;
+      html += collapsibleSection("muebles", "Existencia de muebles en obra",
+        `${totalAplica} área(s) aplican · ${totalNoAplica} no aplican`,
+        `<div class="add-hint">Marca "No aplica" si ese modelo no tiene esa área. Luego indica si ya hay muebles.</div>${draft.rooms.map(roomMueblesRowHtml).join("")}`);
 
       const cocinaRoom = draft.rooms.find(r=>r.type==="cocina");
-      html += `<div class="section"><h3>Cocina</h3>${cocinaRoom.aplica ? detailedRoomHtml(cocinaRoom, false) : `<div class="add-hint">No aplica.</div>`}</div>`;
+      html += collapsibleSection("cocina", "Cocina", roomText(cocinaRoom),
+        cocinaRoom.aplica ? detailedRoomHtml(cocinaRoom, false) : `<div class="add-hint">No aplica.</div>`);
 
       const banoRooms = draft.rooms.filter(r=>r.type==="bano" && r.aplica);
       html += `<div class="section"><h3>Baños</h3>${banoRooms.length ? banoRooms.map(r=>detailedRoomHtml(r,true)).join("") : `<div class="add-hint">Ningún baño marcado como aplicable.</div>`}</div>`;
@@ -603,7 +719,18 @@ function renderEditor(){
   html += `<div class="save-bar"><button class="save-btn" id="btnSave">Guardar unidad</button></div>`;
   overlay.innerHTML = html;
   bindEditorEvents(overlay);
-  overlay.scrollTop = 0;
+  overlay.scrollTop = isNew ? 0 : prevScroll;
+}
+
+function collapsibleSection(key, title, summary, bodyHtml){
+  const collapsed = !!collapsedState[key];
+  return `<div class="section">
+    <h3 class="collapsible ${collapsed ? 'is-collapsed' : ''}" data-collapse-toggle="${key}">
+      <span>${title}</span>
+      <span class="collapse-right">${collapsed ? `<span class="collapse-summary">${escapeHtml(summary)}</span>` : ""}<span class="chevron-toggle">${collapsed ? "▸" : "▾"}</span></span>
+    </h3>
+    ${collapsed ? "" : bodyHtml}
+  </div>`;
 }
 
 function roomMueblesRowHtml(room){
@@ -618,21 +745,37 @@ function roomMueblesRowHtml(room){
 
 function detailedRoomHtml(room, showHead){
   const items = itemsFor(room.type);
-  let html = showHead ? `<div class="room-block" data-room="${room.id}"><div class="room-head">${escapeHtml(room.label)}</div>` : `<div data-room="${room.id}">`;
-  items.forEach(i=>{
-    const st = room.items[i.key];
-    html += `<div class="item-row">
-      <div class="item-label">${escapeHtml(i.label)}</div>
-      ${segButtons("item_"+room.id+"_"+i.key, st.value, "Sí", "No")}
-      ${st.value==="no" ? `<input type="text" class="detail-input" data-room-item-detail="${i.key}" placeholder="¿Qué falta / estatus?" value="${escapeHtml(st.detalle||'')}"/>` : ""}
-    </div>`;
-  });
-  html += `<textarea data-room-notes placeholder="Nota adicional (opcional)">${escapeHtml(room.notas)}</textarea>`;
+  const collapsed = showHead && !!collapsedState[room.id];
+  const summary = collapsed ? roomText(room) : "";
+  let html = showHead
+    ? `<div class="room-block" data-room="${room.id}"><div class="room-head collapsible" data-collapse-toggle="${room.id}">
+        <span class="code">${escapeHtml(room.label)}</span>
+        <span class="collapse-right">${collapsed ? `<span class="collapse-summary">${escapeHtml(summary)}</span>` : ""}<span class="chevron-toggle">${collapsed ? "▸" : "▾"}</span></span>
+      </div>`
+    : `<div data-room="${room.id}">`;
+  if(!collapsed){
+    items.forEach(i=>{
+      const st = room.items[i.key];
+      html += `<div class="item-row">
+        <div class="item-label">${escapeHtml(i.label)}</div>
+        ${segButtons("item_"+room.id+"_"+i.key, st.value, "Sí", "No")}
+        ${st.value==="no" ? `<input type="text" class="detail-input" data-room-item-detail="${i.key}" placeholder="¿Qué falta / estatus?" value="${escapeHtml(st.detalle||'')}"/>` : ""}
+      </div>`;
+    });
+    html += `<textarea data-room-notes placeholder="Nota adicional (opcional)">${escapeHtml(room.notas)}</textarea>`;
+  }
   html += `</div>`;
   return html;
 }
 
 function bindEditorEvents(overlay){
+  overlay.querySelectorAll("[data-collapse-toggle]").forEach(el=>{
+    el.addEventListener("click", ()=>{
+      const key = el.dataset.collapseToggle;
+      collapsedState[key] = !collapsedState[key];
+      renderEditor();
+    });
+  });
   overlay.querySelector("#btnCancel").addEventListener("click", closeEditor);
   overlay.querySelector("#unidadInput").addEventListener("input", (e)=>{ draft.unidad = e.target.value; });
   overlay.querySelector("#modeloInput").addEventListener("input", (e)=>{ draft.modelo = e.target.value; });
@@ -649,6 +792,10 @@ function bindEditorEvents(overlay){
   if(comentarioInput) comentarioInput.addEventListener("input", (e)=>{ draft.comentarioNoInstalar = e.target.value; });
   const observacionesInput = overlay.querySelector("#observacionesInput");
   if(observacionesInput) observacionesInput.addEventListener("input", (e)=>{ draft.observaciones = e.target.value; });
+  const videoInputEntregado = overlay.querySelector("#videoLinkInputEntregado");
+  if(videoInputEntregado) videoInputEntregado.addEventListener("input", (e)=>{ draft.videoLink = e.target.value; });
+  const actaInput = overlay.querySelector("#actaEntregaInput");
+  if(actaInput) actaInput.addEventListener("input", (e)=>{ draft.actaEntregaLink = e.target.value; });
   const videoInput = overlay.querySelector("#videoLinkInput");
   if(videoInput) videoInput.addEventListener("input", (e)=>{ draft.videoLink = e.target.value; });
 
