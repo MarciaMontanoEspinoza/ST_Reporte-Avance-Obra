@@ -475,7 +475,19 @@ function toast(msg){ toastEl.textContent = msg; toastEl.classList.add("show"); s
 function escapeHtml(s){ return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 
 function render(){ if(currentTab === "list") renderList(); else renderReport(); }
-function sortedUnits(){ return [...units].sort((a,b)=> a.unidad.localeCompare(b.unidad)); }
+function nivelSortKey(nivel){
+  const n = parseInt(nivel, 10);
+  return isNaN(n) ? 9999 : n; // niveles no numéricos (ej. "S1") van al final
+}
+function sortedUnits(){
+  return [...units].sort((a,b)=>{
+    const porTorre = (a.torre||"").localeCompare(b.torre||"");
+    if(porTorre !== 0) return porTorre;
+    const porNivel = nivelSortKey(a.nivel) - nivelSortKey(b.nivel);
+    if(porNivel !== 0) return porNivel;
+    return (a.unidad||"").localeCompare(b.unidad||"");
+  });
+}
 
 function unitStateClass(u){
   if(!esUnidadPropia(u)) return "otro-contratista";
