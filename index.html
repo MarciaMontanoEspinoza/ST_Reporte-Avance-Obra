@@ -381,19 +381,29 @@ function newUnit(){
 
 // ---------------- Generación de texto ----------------
 function roomText(room){
-  let parts = [];
-  if(room.muebleEnObra==="no") parts.push("Muebles aún no llegan a obra.");
+  let issues = [];
+  let unreviewed = 0;
+
+  if(room.muebleEnObra === "no") issues.push("Muebles aún no llegan a obra.");
+  else if(room.muebleEnObra === null) unreviewed++;
+
   itemsFor(room.type).forEach(i=>{
     const st = room.items[i.key];
-    if(st.value==="no"){
+    if(st.value === "no"){
       let t = i.falta;
       if(st.detalle && st.detalle.trim()) t += " (" + st.detalle.trim() + ")";
-      parts.push(t + ".");
+      issues.push(t + ".");
+    } else if(st.value === null){
+      unreviewed++;
     }
   });
-  if(room.notas && room.notas.trim()) parts.push(room.notas.trim());
-  if(parts.length===0) return "Completo.";
-  return parts.join(" ");
+
+  if(room.notas && room.notas.trim()) issues.push(room.notas.trim());
+
+  if(issues.length === 0 && unreviewed === 0) return "Completo.";
+  if(issues.length === 0) return unreviewed === 1 ? "Sin revisar (falta marcar 1 punto)." : `Sin revisar (faltan marcar ${unreviewed} puntos).`;
+  if(unreviewed > 0) issues.push(unreviewed === 1 ? "1 punto más sin revisar." : `${unreviewed} puntos más sin revisar.`);
+  return issues.join(" ");
 }
 function unitLabel(u){ return u.unidad + (u.modelo ? " (" + u.modelo + ")" : ""); }
 
@@ -418,8 +428,8 @@ function pendingCount(u){
   if(u.puedeInstalar !== "si") return 0;
   let n = 0;
   u.rooms.filter(r=>r.aplica).forEach(r=>{
-    if(r.muebleEnObra==="no") n++;
-    itemsFor(r.type).forEach(i=>{ if(r.items[i.key].value==="no") n++; });
+    if(r.muebleEnObra !== "si") n++; // cuenta "No" y también "sin revisar"
+    itemsFor(r.type).forEach(i=>{ if(r.items[i.key].value !== "si") n++; });
   });
   return n;
 }
