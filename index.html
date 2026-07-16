@@ -98,7 +98,7 @@
   .room-head.collapsible{ cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
   .field-row{ display:flex; gap:10px; margin-bottom:12px; }
   .field-row input[type=text]{ flex:1; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:15px; font-family:inherit; background:#fff; }
-  input[type=text].full, input[type=url].full{ width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:14.5px; font-family:inherit; background:#fff; }
+  input[type=text].full, input[type=url].full, input[type=date].full{ width:100%; border:1px solid var(--border); border-radius:10px; padding:12px 13px; font-size:14.5px; font-family:inherit; background:#fff; }
   label.field-label{ font-size:12px; font-weight:700; color:var(--ink-soft); display:block; margin-bottom:6px; }
 
   .entregado-toggle{ display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin:18px 18px 0; }
@@ -381,10 +381,10 @@ function defaultRoom(def){
 function newUnit(){
   const now = Date.now();
   return {
-    id: uid(), unidad:"", modelo:"", contratista:"Cucina Capitale", entregado:false,
+    id: uid(), unidad:"", modelo:"", torre:"", nivel:"", contratista:"Cucina Capitale", entregado:false,
     puedeInstalar:null, comentarioNoInstalar:"",
     rooms: ROOM_DEFS.map(defaultRoom),
-    observaciones:"", videoLink:"", actaEntregaLink:"",
+    observaciones:"", videoLink:"", actaEntregaLink:"", fechaEntrega:"",
     createdAt: now, updatedAt: now
   };
 }
@@ -416,6 +416,12 @@ function roomText(room){
   return issues.join(" ");
 }
 function unitLabel(u){ return u.unidad + (u.modelo ? " (" + u.modelo + ")" : ""); }
+function ubicacionTexto(u){
+  const partes = [];
+  if(u.torre) partes.push("Torre " + u.torre);
+  if(u.nivel) partes.push("Nivel " + u.nivel);
+  return partes.join(" · ");
+}
 
 function esUnidadPropia(u){ return u.contratista === "Cucina Capitale"; }
 
@@ -514,6 +520,7 @@ function renderList(){
         <div class="unit-dot"></div>
         <div class="unit-main">
           <div class="unit-code">${escapeHtml(unitLabel(u)) || "Sin unidad"}</div>
+          ${ubicacionTexto(u) ? `<div class="unit-summary">${escapeHtml(ubicacionTexto(u))}</div>` : ""}
           <div class="unit-summary">${unitStateSummary(u)}</div>
           <div class="unit-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDate(u.updatedAt)}</div>
         </div>
@@ -557,6 +564,7 @@ function renderReport(){
     if(!esUnidadPropia(u)){
       html += `<div class="report-card ${unitStateClass(u)}">
         <div class="report-code">${escapeHtml(unitLabel(u))}</div>
+        ${ubicacionTexto(u) ? `<div class="report-dates">${escapeHtml(ubicacionTexto(u))}</div>` : ""}
         <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
         <div class="report-row"><b>Contratista:</b> ${escapeHtml(u.contratista||"")}</div>
         <div class="report-row">Sin seguimiento de instalación — unidad no asignada a Cucina Capitale.</div>
@@ -565,7 +573,9 @@ function renderReport(){
     }
     html += `<div class="report-card ${unitStateClass(u)}">
       <div class="report-code">${escapeHtml(unitLabel(u))}</div>
+      ${ubicacionTexto(u) ? `<div class="report-dates">${escapeHtml(ubicacionTexto(u))}</div>` : ""}
       <div class="report-dates">Capturado: ${formatDate(u.createdAt)} · Últ. actualización: ${formatDateTime(u.updatedAt)}</div>
+      ${u.fechaEntrega ? `<div class="report-row"><b>Fecha de entrega:</b> ${escapeHtml(u.fechaEntrega)}</div>` : ""}
       <div class="report-row"><b>Cocina:</b> ${escapeHtml(r.cocina)}</div>
       <div class="report-row"><b>Baños:</b> ${escapeHtml(r.banos)}</div>
       <div class="report-row"><b>Closets:</b> ${escapeHtml(r.closets)}</div>
@@ -577,11 +587,11 @@ function renderReport(){
   html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad / Modelo\tContratista\tEstado\tFecha de captura\tÚltima actualización\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
+  const tsvRows = ["Unidad / Modelo\tTorre\tNivel\tContratista\tEstado\tFecha de captura\tÚltima actualización\tFecha de entrega\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
   const textRows = [];
   sorted.forEach(u=>{
     const r = reportFor(u);
-    tsvRows.push([unitLabel(u), u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
+    tsvRows.push([unitLabel(u), u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
     textRows.push(`${unitLabel(u)} — ${u.contratista||""} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
   });
   document.getElementById("copyBox").value = textRows.join("\n");
@@ -624,10 +634,10 @@ function csvEscape(s){
   return s;
 }
 function exportCsv(){
-  const rows = [["Unidad","Modelo","Contratista","Estado","Fecha de captura","Última actualización","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
+  const rows = [["Unidad","Modelo","Torre","Nivel","Contratista","Estado","Fecha de captura","Última actualización","Fecha de entrega","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
   sortedUnits().forEach(u=>{
     const r = reportFor(u);
-    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
   });
   const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
@@ -698,6 +708,10 @@ function renderEditor(){
       <div style="flex:1"><label class="field-label">Unidad</label><input type="text" id="unidadInput" placeholder="Ej. D-1307" value="${escapeHtml(draft.unidad)}"/></div>
       <div style="flex:1"><label class="field-label">Modelo</label><input type="text" id="modeloInput" placeholder="Ej. B-5T" value="${escapeHtml(draft.modelo)}"/></div>
     </div>
+    <div class="field-row">
+      <div style="flex:1"><label class="field-label">Torre</label><input type="text" id="torreInput" placeholder="Ej. Torre D" value="${escapeHtml(draft.torre||'')}"/></div>
+      <div style="flex:1"><label class="field-label">Nivel</label><input type="text" id="nivelInput" placeholder="Ej. 13" value="${escapeHtml(draft.nivel||'')}"/></div>
+    </div>
     <label class="field-label">Contratista asignado</label>
     <div class="chip-row">
       ${CONTRATISTA_PRESETS.map(c=>`<button type="button" class="chip ${draft.contratista===c?'selected':''}" data-contratista="${escapeHtml(c)}">${escapeHtml(c)}</button>`).join("")}
@@ -722,6 +736,9 @@ function renderEditor(){
 
     if(draft.entregado){
       html += `<div class="section"><h3>Comprobante de entrega</h3>
+        <label class="field-label">Fecha de entrega</label>
+        <input type="date" class="full" id="fechaEntregaInput" value="${escapeHtml(draft.fechaEntrega||'')}"/>
+        <div style="height:14px"></div>
         <label class="field-label">Video del recorrido (OneDrive)</label>
         <input type="url" class="full" id="videoLinkInputEntregado" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoLink)}"/>
         <div style="height:14px"></div>
@@ -835,6 +852,8 @@ function bindEditorEvents(overlay){
   overlay.querySelector("#btnCancel").addEventListener("click", closeEditor);
   overlay.querySelector("#unidadInput").addEventListener("input", (e)=>{ draft.unidad = e.target.value; });
   overlay.querySelector("#modeloInput").addEventListener("input", (e)=>{ draft.modelo = e.target.value; });
+  overlay.querySelector("#torreInput").addEventListener("input", (e)=>{ draft.torre = e.target.value; });
+  overlay.querySelector("#nivelInput").addEventListener("input", (e)=>{ draft.nivel = e.target.value; });
 
   overlay.querySelectorAll("[data-contratista]").forEach(chip=>{
     chip.addEventListener("click", ()=>{
@@ -861,6 +880,8 @@ function bindEditorEvents(overlay){
   if(videoInputEntregado) videoInputEntregado.addEventListener("input", (e)=>{ draft.videoLink = e.target.value; });
   const actaInput = overlay.querySelector("#actaEntregaInput");
   if(actaInput) actaInput.addEventListener("input", (e)=>{ draft.actaEntregaLink = e.target.value; });
+  const fechaEntregaInput = overlay.querySelector("#fechaEntregaInput");
+  if(fechaEntregaInput) fechaEntregaInput.addEventListener("input", (e)=>{ draft.fechaEntrega = e.target.value; });
   const videoInput = overlay.querySelector("#videoLinkInput");
   if(videoInput) videoInput.addEventListener("input", (e)=>{ draft.videoLink = e.target.value; });
 
