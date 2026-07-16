@@ -55,12 +55,15 @@
   .tool-btn{ flex:1; min-width:100px; background:var(--surface); border:1px solid var(--border); color:var(--primary); padding:11px 8px; border-radius:12px; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; text-align:center; }
   .tool-btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
 
-  .stats{ display:flex; gap:12px; margin-bottom:20px; }
-  .stat{ flex:1; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 12px; text-align:center; }
-  .stat .num{ font-size:21px; font-weight:800; color:var(--primary); }
-  .stat .lbl{ font-size:11px; color:var(--ink-soft); margin-top:3px; }
+  .stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-bottom:20px; }
+  .stat{ background:var(--surface); border:1.5px solid var(--border); border-radius:var(--radius); padding:12px 8px; text-align:center; }
+  .stat[data-stat]{ cursor:pointer; }
+  .stat .num{ font-size:19px; font-weight:800; color:var(--primary); }
+  .stat .lbl{ font-size:10.5px; color:var(--ink-soft); margin-top:3px; line-height:1.25; }
   .stat.ok .num{ color:var(--ok); }
   .stat.pending .num{ color:var(--pending); }
+  .stat.accent .num{ color:var(--accent-deep); }
+  .stat.active{ border-color:var(--primary); background:var(--primary-soft); box-shadow:0 0 0 1px var(--primary); }
 
   .unit-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:12px; display:flex; align-items:center; gap:14px; cursor:pointer; }
   .unit-card.entregado{ background:var(--ok-soft); border-color:#BFE0C9; }
@@ -513,7 +516,21 @@ function filteredUnits(){
     return true;
   });
 }
-function hayFiltrosActivos(){ return !!(activeFilters.torre || activeFilters.nivel || activeFilters.modelo); }
+
+let activeStatFilter = null; // null | "cucina" | "entregadas" | "preentrega" | "enproceso" | "pendientes"
+
+function matchesStatFilter(u){
+  switch(activeStatFilter){
+    case "cucina": return esUnidadPropia(u);
+    case "entregadas": return esUnidadPropia(u) && u.entregado;
+    case "preentrega": return esUnidadPropia(u) && !u.entregado && u.preEntrega;
+    case "enproceso": return esUnidadPropia(u) && !u.entregado && !u.preEntrega && u.puedeInstalar === "si";
+    case "pendientes": return esUnidadPropia(u) && !u.entregado && !u.preEntrega && u.puedeInstalar !== "si";
+    default: return true;
+  }
+}
+
+function hayFiltrosActivos(){ return !!(activeFilters.torre || activeFilters.nivel || activeFilters.modelo || activeStatFilter); }
 
 function unitStateClass(u){
   if(!esUnidadPropia(u)) return "otro-contratista";
@@ -543,10 +560,17 @@ function unitStateSummary(u){
 }
 
 function renderList(){
-  const base = filteredUnits();
-  const totalEntregados = base.filter(u=>u.entregado).length;
-  const totalNoInstalable = base.filter(u=>!u.entregado && u.puedeInstalar==="no").length;
-  const totalPend = base.length - totalEntregados - totalNoInstalable;
+  const statsBase = filteredUnits();
+  const cucinaBase = statsBase.filter(esUnidadPropia);
+  const totalUnidades = statsBase.length;
+  const totalCucina = cucinaBase.length;
+  const totalEntregadas = cucinaBase.filter(u=>u.entregado).length;
+  const totalPreEntrega = cucinaBase.filter(u=>!u.entregado && u.preEntrega).length;
+  const totalEnProceso = cucinaBase.filter(u=>!u.entregado && !u.preEntrega && u.puedeInstalar==="si").length;
+  const totalPendientes = cucinaBase.filter(u=>!u.entregado && !u.preEntrega && u.puedeInstalar!=="si").length;
+
+  const base = statsBase.filter(matchesStatFilter);
+
   let html = `<div class="toolbar">
     <button class="tool-btn primary" id="btnNew">+ Nueva unidad</button>
     <button class="tool-btn" id="btnSync">🔗 Respaldo compartido</button>
@@ -575,9 +599,12 @@ function renderList(){
   </div>`;
 
   html += `<div class="stats">
-    <div class="stat"><div class="num">${base.length}</div><div class="lbl">Unidades</div></div>
-    <div class="stat ok"><div class="num">${totalEntregados}</div><div class="lbl">Entregadas</div></div>
-    <div class="stat pending"><div class="num">${totalPend}</div><div class="lbl">En proceso</div></div>
+    <div class="stat"><div class="num">${totalUnidades}</div><div class="lbl">Unidades</div></div>
+    <div class="stat ${activeStatFilter==='cucina'?'active':''}" data-stat="cucina"><div class="num">${totalCucina}</div><div class="lbl">Cucina Capitale</div></div>
+    <div class="stat ok ${activeStatFilter==='entregadas'?'active':''}" data-stat="entregadas"><div class="num">${totalEntregadas}</div><div class="lbl">Entregadas</div></div>
+    <div class="stat accent ${activeStatFilter==='preentrega'?'active':''}" data-stat="preentrega"><div class="num">${totalPreEntrega}</div><div class="lbl">Pre-entrega</div></div>
+    <div class="stat ${activeStatFilter==='enproceso'?'active':''}" data-stat="enproceso"><div class="num">${totalEnProceso}</div><div class="lbl">En proceso</div></div>
+    <div class="stat pending ${activeStatFilter==='pendientes'?'active':''}" data-stat="pendientes"><div class="num">${totalPendientes}</div><div class="lbl">Pendientes / por empezar</div></div>
   </div>`;
 
   if(units.length === 0){
@@ -614,7 +641,15 @@ function renderList(){
   document.getElementById("filterNivel").addEventListener("change", (e)=>{ activeFilters.nivel = e.target.value; render(); });
   document.getElementById("filterModelo").addEventListener("change", (e)=>{ activeFilters.modelo = e.target.value; render(); });
   const clearFiltersBtn = document.getElementById("btnClearFilters");
-  if(clearFiltersBtn) clearFiltersBtn.addEventListener("click", ()=>{ activeFilters = {torre:"", nivel:"", modelo:""}; render(); });
+  if(clearFiltersBtn) clearFiltersBtn.addEventListener("click", ()=>{ activeFilters = {torre:"", nivel:"", modelo:""}; activeStatFilter = null; render(); });
+
+  document.querySelectorAll(".stat[data-stat]").forEach(box=>{
+    box.addEventListener("click", ()=>{
+      const key = box.dataset.stat;
+      activeStatFilter = (activeStatFilter === key) ? null : key;
+      render();
+    });
+  });
 
   const clearBtn = document.getElementById("clearAll");
   if(clearBtn) clearBtn.addEventListener("click", ()=>{
