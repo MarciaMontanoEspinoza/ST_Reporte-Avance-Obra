@@ -70,10 +70,12 @@
   .unit-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
   .unit-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); opacity:.85; }
   .unit-card.pre-entrega{ background:#F7EAD9; border-color:var(--accent); }
+  .unit-card.entregado-con-pendientes{ background:var(--pending-soft); border-color:var(--pending); }
   .unit-dot{ width:10px; height:10px; border-radius:50%; flex-shrink:0; background:var(--pending); }
   .unit-card.entregado .unit-dot{ background:var(--ok); }
   .unit-card.no-instalable .unit-dot{ background:var(--danger); }
   .unit-card.pre-entrega .unit-dot{ background:var(--accent); }
+  .unit-card.entregado-con-pendientes .unit-dot{ background:var(--pending); }
   .unit-card.otro-contratista .unit-dot{ background:var(--ink-soft); }
   .chip-row{ display:flex; flex-wrap:wrap; gap:9px; margin-bottom:12px; }
   .chip{ border:1px solid var(--border); background:#fff; color:var(--ink); padding:9px 14px; border-radius:20px; font-size:13.5px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -178,8 +180,14 @@
   .garantias-table tbody tr:last-child td{ border-bottom:none; }
   .garantias-table select, .garantias-table input[type=text]{ width:100%; min-width:140px; border:1px solid var(--border); border-radius:8px; padding:8px 7px; font-size:12.5px; font-family:inherit; background:#fff; }
   .garantias-table .col-remove{ width:34px; min-width:34px; text-align:center; padding:6px 2px; }
+  .garantias-table .col-atendida{ width:70px; min-width:70px; text-align:center; }
+  .garantias-table .col-atendida input[type=checkbox]{ width:20px; height:20px; accent-color:var(--ok); }
   .garantias-table .remove-cell-btn{ border:none; background:none; color:var(--danger); font-size:17px; cursor:pointer; padding:6px; }
   .garantias-table-readonly td{ font-size:12.5px; white-space:nowrap; max-width:180px; overflow:hidden; text-overflow:ellipsis; }
+  .garantias-table-readonly tr.fila-atendida td{ color:var(--ink-soft); text-decoration:line-through; opacity:.7; }
+  .garantias-table-readonly tr.fila-atendida td:last-child{ text-decoration:none; }
+  .estatus-ok{ background:var(--ok-soft); color:var(--ok); font-weight:700; font-size:11px; padding:3px 8px; border-radius:8px; }
+  .estatus-pend{ background:var(--pending-soft); color:var(--pending); font-weight:700; font-size:11px; padding:3px 8px; border-radius:8px; }
   .garantias-table-readonly td.wrap-cell{ white-space:normal; overflow:visible; text-overflow:clip; max-width:260px; }
   .room-block:last-child{ margin-bottom:0; }
   .room-head{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:14px; color:var(--accent-deep); }
@@ -196,6 +204,8 @@
   .report-card.no-instalable{ background:var(--danger-soft); border-color:#F0C4BF; }
   .report-card.otro-contratista{ background:#F1EFEA; border-color:var(--stone); }
   .report-card.pre-entrega{ background:#F7EAD9; border-color:var(--accent); }
+  .report-card.entregado-con-pendientes{ background:var(--pending-soft); border-color:var(--pending); }
+  .pend-tag{ color:var(--pending); font-weight:700; }
   .report-code{ font-family:var(--mono); font-weight:700; font-size:15px; margin-bottom:6px; }
   .report-dates{ font-size:11px; color:var(--ink-soft); margin-bottom:10px; }
   .report-row{ font-size:13px; margin-bottom:8px; line-height:1.45; }
@@ -247,6 +257,7 @@ function loadLocal(){
     parsed.forEach(u=>{
       if(!u.contratista) u.contratista = "Cucina Capitale";
       if(!u.garantias) u.garantias = [];
+      u.garantias.forEach(g=>{ if(g.atendida===undefined) g.atendida = false; });
       if(u.videoNoInstalar === undefined) u.videoNoInstalar = "";
       if(u.tieneGarantias === undefined) u.tieneGarantias = false;
       (u.rooms||[]).forEach(r=>{ if(!r.piezasEstado) r.piezasEstado = {}; });
@@ -438,7 +449,7 @@ function newUnit(){
   };
 }
 function defaultGarantia(){
-  return { id: uid(), areaGeneral:"", areaEspecifica:"", mueble:"", descripcion:"" };
+  return { id: uid(), areaGeneral:"", areaEspecifica:"", mueble:"", descripcion:"", atendida:false };
 }
 
 // ---------------- Generación de texto ----------------
@@ -510,11 +521,17 @@ function pendingCount(u){
 }
 function estadoLabel(u){
   if(!esUnidadPropia(u)) return "Contratista: " + (u.contratista || "otro");
-  if(u.entregado) return "Entregado";
+  if(u.entregado){
+    const pend = garantiasPendientesCount(u);
+    return pend > 0 ? `Entregado (${pend} garantía(s) pendiente(s))` : "Entregado";
+  }
   if(u.preEntrega) return "Pre-entrega";
   if(u.puedeInstalar==="no") return "No se puede instalar";
   if(u.puedeInstalar==="si") return "En proceso";
   return "Sin iniciar";
+}
+function garantiasPendientesCount(u){
+  return (u.garantias||[]).filter(g => (g.mueble || (g.descripcion && g.descripcion.trim())) && !g.atendida).length;
 }
 
 // ---------------- Fechas ----------------
@@ -581,7 +598,7 @@ function hayFiltrosActivos(){ return !!(activeFilters.torre || activeFilters.niv
 
 function unitStateClass(u){
   if(!esUnidadPropia(u)) return "otro-contratista";
-  if(u.entregado) return "entregado";
+  if(u.entregado) return garantiasPendientesCount(u) > 0 ? "entregado-con-pendientes" : "entregado";
   if(u.preEntrega) return "pre-entrega";
   if(u.puedeInstalar==="no") return "no-instalable";
   return "";
@@ -591,6 +608,8 @@ function unitStateSummary(u){
   if(u.entregado){
     let s = "<b>ENTREGADO</b>";
     if(u.fechaEntrega && u.fechaEntrega.trim()) s += ` <i>${escapeHtml(u.fechaEntrega.trim())}</i>`;
+    const pend = garantiasPendientesCount(u);
+    if(pend > 0) s += ` · <span class="pend-tag">${pend} garantía${pend>1?"s":""} pendiente${pend>1?"s":""}</span>`;
     return s;
   }
   if(u.preEntrega){
@@ -785,6 +804,7 @@ function renderGarantias(){
         mueble: g.mueble ? muebleLabel(g.areaGeneral, g.mueble) : "—",
         codigo: g.mueble || "—",
         descripcion: g.descripcion.trim() || "—",
+        atendida: !!g.atendida,
       });
     });
   });
@@ -794,26 +814,33 @@ function renderGarantias(){
     return;
   }
 
-  let html = `<button class="action-btn" id="copyGarantiasTsv">Copiar tabla (para Excel / Word)</button>
+  const pendientesN = filas.filter(f=>!f.atendida).length;
+  let html = `<div class="stats">
+    <div class="stat"><div class="num">${filas.length}</div><div class="lbl">Total</div></div>
+    <div class="stat pending"><div class="num">${pendientesN}</div><div class="lbl">Pendientes</div></div>
+    <div class="stat ok"><div class="num">${filas.length-pendientesN}</div><div class="lbl">Atendidas</div></div>
+  </div>
+  <button class="action-btn" id="copyGarantiasTsv">Copiar tabla (para Excel / Word)</button>
     <div class="garantias-scroll-hint">Desliza la tabla hacia los lados para ver todas las columnas →</div>
     <div class="garantias-table-wrap">
       <table class="garantias-table garantias-table-readonly">
-        <thead><tr><th>Unidad</th><th>Espacio</th><th>Mueble</th><th>Código</th><th>Defecto</th></tr></thead>
+        <thead><tr><th>Unidad</th><th>Espacio</th><th>Mueble</th><th>Código</th><th>Defecto</th><th>Estatus</th></tr></thead>
         <tbody>`;
   filas.forEach(f=>{
-    html += `<tr>
+    html += `<tr class="${f.atendida ? 'fila-atendida' : ''}">
       <td>${escapeHtml(f.unidad)}</td>
       <td>${escapeHtml(f.general)}${f.especifica ? " — " + escapeHtml(f.especifica) : ""}</td>
       <td>${escapeHtml(f.mueble)}</td>
       <td>${escapeHtml(f.codigo)}</td>
       <td class="wrap-cell">${escapeHtml(f.descripcion)}</td>
+      <td>${f.atendida ? '<span class="estatus-ok">Atendida</span>' : '<span class="estatus-pend">Pendiente</span>'}</td>
     </tr>`;
   });
   html += `</tbody></table></div>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad\tEspacio general\tEspacio específico\tMueble\tCódigo técnico\tDescripción del defecto"];
-  filas.forEach(f=> tsvRows.push([f.unidad, f.general, f.especifica, f.mueble, f.codigo, f.descripcion].join("\t")));
+  const tsvRows = ["Unidad\tEspacio general\tEspacio específico\tMueble\tCódigo técnico\tDescripción del defecto\tEstatus"];
+  filas.forEach(f=> tsvRows.push([f.unidad, f.general, f.especifica, f.mueble, f.codigo, f.descripcion, f.atendida?"Atendida":"Pendiente"].join("\t")));
   document.getElementById("copyGarantiasTsv").addEventListener("click", ()=> copyToClipboard(tsvRows.join("\n"), "Tabla de garantías copiada"));
 }
 
@@ -872,6 +899,7 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
       incoming.forEach(iu=>{
         if(!iu.contratista) iu.contratista = "Cucina Capitale";
         if(!iu.garantias) iu.garantias = [];
+        iu.garantias.forEach(g=>{ if(g.atendida===undefined) g.atendida = false; });
         if(iu.videoNoInstalar === undefined) iu.videoNoInstalar = "";
         if(iu.tieneGarantias === undefined) iu.tieneGarantias = false;
         (iu.rooms||[]).forEach(r=>{ if(!r.piezasEstado) r.piezasEstado = {}; });
@@ -937,6 +965,7 @@ function garantiasSectionHtml(draft){
             <th>Espacio específico</th>
             <th>Mueble</th>
             <th>Descripción del defecto</th>
+            <th>Atendida</th>
             <th></th>
           </tr></thead>
           <tbody>
@@ -975,6 +1004,7 @@ function garantiaRowHtml(g, rooms){
       </select>
     </td>
     <td><input type="text" data-garantia-descripcion value="${escapeHtml(g.descripcion)}" placeholder="Ej. Puerta sin perforación..."/></td>
+    <td class="col-atendida"><input type="checkbox" data-garantia-atendida ${g.atendida?"checked":""}/></td>
     <td class="col-remove"><button type="button" class="remove-cell-btn" data-garantia-remove title="Quitar esta pieza">✕</button></td>
   </tr>`;
 }
@@ -1002,6 +1032,8 @@ function bindGarantiaEvents(overlay){
     if(selMueble) selMueble.addEventListener("change", (e)=>{ g.mueble = e.target.value; });
     const inputDesc = row.querySelector("[data-garantia-descripcion]");
     if(inputDesc) inputDesc.addEventListener("input", (e)=>{ g.descripcion = e.target.value; });
+    const chkAtendida = row.querySelector("[data-garantia-atendida]");
+    if(chkAtendida) chkAtendida.addEventListener("change", (e)=>{ g.atendida = e.target.checked; renderEditor(); });
     const removeBtn = row.querySelector("[data-garantia-remove]");
     if(removeBtn) removeBtn.addEventListener("click", ()=>{
       draft.garantias = draft.garantias.filter(x=>x.id!==gid);
