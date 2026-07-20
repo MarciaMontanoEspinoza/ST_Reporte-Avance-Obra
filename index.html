@@ -247,6 +247,7 @@ function loadLocal(){
     parsed.forEach(u=>{
       if(!u.contratista) u.contratista = "Cucina Capitale";
       if(!u.garantias) u.garantias = [];
+      if(u.videoNoInstalar === undefined) u.videoNoInstalar = "";
       if(u.tieneGarantias === undefined) u.tieneGarantias = false;
       (u.rooms||[]).forEach(r=>{ if(!r.piezasEstado) r.piezasEstado = {}; });
     });
@@ -430,7 +431,7 @@ function newUnit(){
     id: uid(), unidad:"", modelo:"", torre:"", nivel:"", contratista:"Cucina Capitale",
     preEntrega:false, fechaPreEntrega:"", entregado:false,
     tieneGarantias:false, garantias:[],
-    puedeInstalar:null, comentarioNoInstalar:"",
+    puedeInstalar:null, comentarioNoInstalar:"", videoNoInstalar:"",
     rooms: ROOM_DEFS.map(defaultRoom),
     observaciones:"", videoLink:"", actaEntregaLink:"", fechaEntrega:"",
     createdAt: now, updatedAt: now
@@ -740,16 +741,17 @@ function renderReport(){
       <div class="report-row"><b>Observaciones:</b> ${escapeHtml(r.obs)}</div>
       ${u.videoLink ? `<div class="report-row"><b>Video:</b> <a href="${escapeHtml(u.videoLink)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
       ${u.actaEntregaLink ? `<div class="report-row"><b>Hoja de entrega:</b> <a href="${escapeHtml(u.actaEntregaLink)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
+      ${u.videoNoInstalar ? `<div class="report-row"><b>Video (motivo bloqueo):</b> <a href="${escapeHtml(u.videoNoInstalar)}" target="_blank" rel="noopener">Ver en OneDrive</a></div>` : ""}
     </div>`;
   });
   html += `<textarea class="copy-box" id="copyBox" readonly></textarea>`;
   content.innerHTML = html;
 
-  const tsvRows = ["Unidad / Modelo\tTorre\tNivel\tContratista\tEstado\tFecha de captura\tÚltima actualización\tFecha de pre-entrega\tFecha de entrega\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega"];
+  const tsvRows = ["Unidad / Modelo\tTorre\tNivel\tContratista\tEstado\tFecha de captura\tÚltima actualización\tFecha de pre-entrega\tFecha de entrega\tCocina\tBaños\tClosets\tObservaciones\tVideo\tHoja de entrega\tVideo (motivo bloqueo)"];
   const textRows = [];
   sorted.forEach(u=>{
     const r = reportFor(u);
-    tsvRows.push([unitLabel(u), u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""].join("\t"));
+    tsvRows.push([unitLabel(u), u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||"", u.videoNoInstalar||""].join("\t"));
     textRows.push(`${unitLabel(u)} — ${u.contratista||""} — ${estadoLabel(u)}\nCapturado: ${formatDate(u.createdAt)} · Actualizado: ${formatDateTime(u.updatedAt)}\nCocina: ${r.cocina}\nBaños: ${r.banos}\nClosets: ${r.closets}\nObservaciones: ${r.obs}${u.videoLink ? "\nVideo: "+u.videoLink : ""}${u.actaEntregaLink ? "\nHoja de entrega: "+u.actaEntregaLink : ""}\n`);
   });
   document.getElementById("copyBox").value = textRows.join("\n");
@@ -850,10 +852,10 @@ function csvEscape(s){
   return s;
 }
 function exportCsv(){
-  const rows = [["Unidad","Modelo","Torre","Nivel","Contratista","Estado","Fecha de captura","Última actualización","Fecha de pre-entrega","Fecha de entrega","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega"]];
+  const rows = [["Unidad","Modelo","Torre","Nivel","Contratista","Estado","Fecha de captura","Última actualización","Fecha de pre-entrega","Fecha de entrega","Cocina","Baños","Closets","Observaciones","Video","Hoja de entrega","Video (motivo bloqueo)"]];
   sortedUnits().forEach(u=>{
     const r = reportFor(u);
-    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||""]);
+    rows.push([unitLabel(u).replace(/ \(.*\)$/,""), u.modelo, u.torre||"", u.nivel||"", u.contratista||"", estadoLabel(u), formatDate(u.createdAt), formatDateTime(u.updatedAt), u.fechaPreEntrega||"", u.fechaEntrega||"", r.cocina, r.banos, r.closets, r.obs, u.videoLink||"", u.actaEntregaLink||"", u.videoNoInstalar||""]);
   });
   const csv = "\uFEFF" + rows.map(row=>row.map(csvEscape).join(",")).join("\r\n");
   downloadBlob(csv, `satori_reporte_${stamp()}.csv`, "text/csv;charset=utf-8");
@@ -870,6 +872,7 @@ document.getElementById("importFile").addEventListener("change", (e)=>{
       incoming.forEach(iu=>{
         if(!iu.contratista) iu.contratista = "Cucina Capitale";
         if(!iu.garantias) iu.garantias = [];
+        if(iu.videoNoInstalar === undefined) iu.videoNoInstalar = "";
         if(iu.tieneGarantias === undefined) iu.tieneGarantias = false;
         (iu.rooms||[]).forEach(r=>{ if(!r.piezasEstado) r.piezasEstado = {}; });
       });
@@ -1085,6 +1088,9 @@ function renderEditor(){
       html += `<div class="comentario-box section">
         <h3>¿Por qué no se puede instalar?</h3>
         <textarea id="comentarioInput" placeholder="Describe el motivo...">${escapeHtml(draft.comentarioNoInstalar)}</textarea>
+        <div style="height:14px"></div>
+        <label class="field-label">Video de evidencia (OneDrive)</label>
+        <input type="url" class="full" id="videoNoInstalarInput" placeholder="https://onedrive.live.com/..." value="${escapeHtml(draft.videoNoInstalar||'')}"/>
       </div>`;
     }
 
@@ -1267,6 +1273,8 @@ function bindEditorEvents(overlay){
 
   const comentarioInput = overlay.querySelector("#comentarioInput");
   if(comentarioInput) comentarioInput.addEventListener("input", (e)=>{ draft.comentarioNoInstalar = e.target.value; });
+  const videoNoInstalarInput = overlay.querySelector("#videoNoInstalarInput");
+  if(videoNoInstalarInput) videoNoInstalarInput.addEventListener("input", (e)=>{ draft.videoNoInstalar = e.target.value; });
   const observacionesInput = overlay.querySelector("#observacionesInput");
   if(observacionesInput) observacionesInput.addEventListener("input", (e)=>{ draft.observaciones = e.target.value; });
   const videoInputEntregado = overlay.querySelector("#videoLinkInputEntregado");
