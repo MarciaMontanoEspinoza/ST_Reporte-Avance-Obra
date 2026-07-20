@@ -961,11 +961,11 @@ function garantiasSectionHtml(draft){
       <div class="garantias-table-wrap">
         <table class="garantias-table">
           <thead><tr>
+            <th>Atendida</th>
             <th>Espacio general</th>
             <th>Espacio específico</th>
             <th>Mueble</th>
             <th>Descripción del defecto</th>
-            <th>Atendida</th>
             <th></th>
           </tr></thead>
           <tbody>
@@ -985,6 +985,7 @@ function garantiaRowHtml(g, rooms){
   const especificas = g.areaGeneral ? rooms.filter(r=>r.type===g.areaGeneral && r.aplica) : [];
   const muebles = g.areaGeneral ? (CATALOGO_MUEBLES[g.areaGeneral]||[]) : [];
   return `<tr data-garantia="${g.id}">
+    <td class="col-atendida"><input type="checkbox" data-garantia-atendida ${g.atendida?"checked":""}/></td>
     <td>
       <select data-garantia-general>
         <option value="">Elige...</option>
@@ -1004,7 +1005,6 @@ function garantiaRowHtml(g, rooms){
       </select>
     </td>
     <td><input type="text" data-garantia-descripcion value="${escapeHtml(g.descripcion)}" placeholder="Ej. Puerta sin perforación..."/></td>
-    <td class="col-atendida"><input type="checkbox" data-garantia-atendida ${g.atendida?"checked":""}/></td>
     <td class="col-remove"><button type="button" class="remove-cell-btn" data-garantia-remove title="Quitar esta pieza">✕</button></td>
   </tr>`;
 }
